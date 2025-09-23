@@ -5,11 +5,11 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import Home from './components/Home';
 import CustomerLogin from './components/CustomerLogin';
 import CustomerRegister from './components/CustomerRegister';
-import AdminLogin from './components/AdminLogin';
-import UserOtp from './components/UserOtp';
-import ResetPassword from './components/ResetPassword';
+import EmployeeLogin from './components/EmployeeLogin';
+import Otp from './components/Otp';
+import ForgotPassword from './components/ForgotPassword';
 import CustomerMakePayment from './components/CustomerMakePayment';
-import AdminViewPayments from './components/AdminDashboard';
+import EmployeeViewPayments from './components/AdminDashboard';
 import NotFound from './components/NotFound';
 
 function App() {
@@ -20,11 +20,11 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/customer-login" element={<CustomerLogin />} />
                 <Route path="/customer-register" element={<CustomerRegister />} />
-                <Route path="/admin-login" element={<AdminLogin />} />
-                <Route path="/user-otp" element={<UserOtp />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/employee-login" element={<EmployeeLogin />} />
+                <Route path="/otp" element={<Otp />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/customer-make-payment" element={<CustomerMakePayment />} />
-                <Route path="/admin-view-payments" element={<AdminViewPayments />} />
+                <Route path="/employee-view-payments" element={<EmployeeViewPayments />} />
                 <Route path="*" element={<NotFound />} />
             </Routes>
         </div>
