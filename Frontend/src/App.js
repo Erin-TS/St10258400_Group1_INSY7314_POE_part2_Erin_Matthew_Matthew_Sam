@@ -2,15 +2,15 @@
 import React from 'react';
 import './App.css';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Home from './components/Home';
-import CustomerLogin from './components/CustomerLogin';
-import CustomerRegister from './components/CustomerRegister';
-import EmployeeLogin from './components/EmployeeLogin';
-import Otp from './components/Otp';
-import ForgotPassword from './components/ForgotPassword';
-import CustomerMakePayment from './components/CustomerMakePayment';
-import EmployeeViewPayments from './components/AdminDashboard';
-import NotFound from './components/NotFound';
+import Home from './components/Home.js';
+import CustomerLogin from './components/CustomerLogin.js';
+import CustomerRegister from './components/CustomerRegister.js';
+import EmployeeLogin from './components/EmployeeLogin.js';
+import Otp from './components/OTP.js';
+import ForgotPassword from './components/ForgotPassword.js';
+import CustomerMakePayment from './components/CustomerMakePayment.js';
+import EmployeeViewPayments from './components/EmployeeViewPayments.js';
+import NotFound from './components/NotFound.js';
 
 function App() {
   return (

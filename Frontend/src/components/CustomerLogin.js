@@ -80,7 +80,7 @@ const CustomerLogin = () => {
                   <button type="submit" disabled={loading} className="form-button">
             {loading ? 'Logging in...' : 'Continue'}
           </button>
-                <p>Don't have an account? <Link to="/CustomerRegister">Register here</Link></p>
+                <p>Don't have an account? <Link to="/customer-register">Register here</Link></p>
 
                 <Link to="/forgot-password" className='forgot-password-link'>Forgot Password?</Link>
 
