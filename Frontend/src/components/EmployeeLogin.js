@@ -9,6 +9,7 @@ const EmployeeLogin = () => {
         password: ''
     });
 
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -20,15 +21,28 @@ const EmployeeLogin = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
+
         //handle login logic here
         console.log('Customer login data:', formData);
+
+
+        setTimeout(() => {
+            localStorage.setItem('userType', 'employee');
+            localStorage.setItem('isLoggedIn', 'false'); // Set true after OTP verification
+            localStorage.setItem('employeeData', JSON.stringify(formData)); // Store employee data
+
+
         //after  login navigate to opt
-        navigate('/otp');
+        navigate('/otp', { state: { userType: 'employee', from: 'login' } });
+      setLoading(false);
+    }, 2000); // Simulate a 2-second loading time
     };
 
     return (
         <div className="form-container">
-            <h2>Employee Login</h2>
+            <div className="form-card">
+            <h2 className='form-title'>Employee Login</h2>
             <form onSubmit={handleSubmit}>
                
                 <div className='form-group'>
@@ -53,11 +67,15 @@ const EmployeeLogin = () => {
                     required    
                 />
                 </div>
-                <button type="submit" className='form-button'>Continue</button>
+                
+          <button type="submit" disabled={loading} className="form-button">
+            {loading ? 'Logging in...' : 'Continue'}
+          </button>
 
                 <Link to="/forgot-password" className='forgot-password-link'>Forgot Password?</Link>
 
             </form>
+        </div>
         </div>
     );
 }
