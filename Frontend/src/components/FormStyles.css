@@ -42,7 +42,7 @@
 }
 
 .nav-link {
-  background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+  background: #2c5282;
   color: white;
   text-decoration: none;
   padding: 12px 24px;
@@ -111,7 +111,7 @@
 
 .form-button {
   width: 100%;
-  background: linear-gradient(45deg, #667eea, #764ba2);
+  background: #2c5282;
   color: white;
   border: none;
   padding: 15px;
@@ -125,7 +125,7 @@
 
 .form-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 15px rgba(44, 82, 130, 0.3);
 }
 
 .form-button:disabled {

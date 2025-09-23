@@ -36,12 +36,11 @@ module.exports = {
         static: {
             directory: path.join(__dirname, 'Frontend/dist')
         },
-        port: 3001,
+        port: 3000,
         host: 'localhost',
         historyApiFallback: true,
         hot: true,
-        open: true,
-        compress: true
+        open: false
     },
     resolve: {
         extensions: ['.js', '.jsx']
