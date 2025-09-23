@@ -27,7 +27,7 @@ const ForgotPassword = () => {
     e.preventDefault();
     setLoading(true);
     
-    // Backend team will implement email verification logic here
+    // implement email verification logic here
     console.log('Forgot Password - Email:', formData.email);
     
     setTimeout(() => {
@@ -41,7 +41,7 @@ const ForgotPassword = () => {
     e.preventDefault();
     setLoading(true);
     
-    // Backendverification logic here 
+    // verification logic here 
     console.log('Forgot Password - Reset Code:', formData.resetCode);
     
     setTimeout(() => {
@@ -49,7 +49,7 @@ const ForgotPassword = () => {
       setStep(3);
       setLoading(false);
     }, 1500);
-    
+  };
 
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -61,7 +61,7 @@ const ForgotPassword = () => {
     
     setLoading(true);
     
-    // Backend team will implement password reset logic here
+    // implement password reset logic here
     console.log('Forgot Password - New Password:', formData.newPassword);
     
     setTimeout(() => {
