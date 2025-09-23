@@ -10,6 +10,7 @@ const CustomerLogin = () => {
         password: ''
     });
 
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -19,17 +20,28 @@ const CustomerLogin = () => {
         });
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit =  (e) => {
         e.preventDefault();
+        setLoading(true);
+
         //handle login logic here
         console.log('Customer login data:', formData);
+
+        setTimeout(() => {
+            localStorage.setItem('userType', 'customer'); // Store user type in localStorage
+            localStorage.setItem('isLoggedIn', 'false'); // Set true after OTP verification
+            localStorage.setItem('customerData', JSON.stringify(formData)); // Store customer data
+
         //after  login navigate to opt
-        navigate('/otp');
+        navigate('/otp', { state: { userType: 'customer',from : 'login' } });
+        setLoading(false);
+        }, 2000); // Simulate a 2-second loading time
     };
 
     return (
         <div className="form-container">
-            <h2>Customer Login</h2>
+            <div className="form-card">
+            <h2 className='form-title'>Customer Login</h2>
             <form onSubmit={handleSubmit}>
                 <div className='form-group'>
                 <label>Account Number:</label>
@@ -42,6 +54,7 @@ const CustomerLogin = () => {
                     required
                 />
                 </div>
+
                 <div className='form-group'>
                 <label>Username:</label>
                 <input
@@ -64,14 +77,17 @@ const CustomerLogin = () => {
                     required    
                 />
                 </div>
-                <button type="submit" className='form-button'>Continue</button>
-
+                  <button type="submit" disabled={loading} className="form-button">
+            {loading ? 'Logging in...' : 'Continue'}
+          </button>
                 <p>Don't have an account? <Link to="/CustomerRegister">Register here</Link></p>
 
                 <Link to="/forgot-password" className='forgot-password-link'>Forgot Password?</Link>
 
             </form>
         </div>
+        </div>
     );
-}
+};
+
 export default CustomerLogin;
