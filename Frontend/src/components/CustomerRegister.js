@@ -15,6 +15,7 @@ const CustomerRegister = () => {
     });
 
     const [captchaChecked, setCaptchaChecked] = useState(false);
+    cosnt [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -27,16 +28,31 @@ const CustomerRegister = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if(!captchaChecked) {
-            alert('Please complete the CAPTCHA! to verify you are not a robot');
+            alert('Please complete the CAPTCHA to verify you are not a robot');
             return;
         }
 
+        if(formData.password !== formData.confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+
+        setLoading(true);
+
         //registration to be implemented logic here
-
-
         console.log('Customer registration data:', formData);
-        alert('Registration successful! Please login.');
-        navigate('/customer/login');
+
+
+        setTimeout(() => {
+            alert('Registration successful! Please login.');
+            //clear existing login data
+            localStorage.removeItem('userType');
+            localStorage.removeItem('isLoggedIn');
+
+            //navigate to customer login after registration
+            navigate('/CustomerLogin');
+            setLoading(false);
+        }, 2000); // Simulate a 2-second loading time
     };
     
     return (
@@ -133,19 +149,22 @@ const CustomerRegister = () => {
                     required
                     />
                 </div>
-                <div className="form-group captcha-group">
-                    <input
-                        type="checkbox"
-                        checked={captchaChecked}
-                        onChange={() => setCaptchaChecked(!captchaChecked)}
-                        className="captcha-checkbox"
-                        id="captcha"
-                    />
-                    <label htmlFor="captcha" className="captcha-label">
-                        I'm not a robot
-                    </label>
-                </div>
-                <button type="submit" className="submit-button">Register</button>
+               <div className="captcha-container">
+            <input
+              type="checkbox"
+              id="captcha"
+              checked={captchaChecked}
+              onChange={(e) => setCaptchaChecked(e.target.checked)}
+            />
+            <label htmlFor="captcha" className="captcha-label">
+              I'm not a robot
+            </label>
+            <div className="captcha-icon">🔒</div>
+          </div>
+
+          <button type="submit" disabled={loading} className="form-button">
+            {loading ? 'Registering...' : 'Register'}
+          </button>
             </form>
             </div>
         </div>
