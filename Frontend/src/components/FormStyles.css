@@ -6,6 +6,10 @@
   margin: 0 auto;
   padding: 40px 20px;
   color: white;
+  min-height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .home-container h1 {

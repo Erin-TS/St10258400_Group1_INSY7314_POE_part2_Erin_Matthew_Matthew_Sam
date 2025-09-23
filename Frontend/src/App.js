@@ -2,6 +2,7 @@
 import React from 'react';
 import './App.css';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Navigation from './components/Navigation.js';
 import Home from './components/Home.js';
 import CustomerLogin from './components/CustomerLogin.js';
 import CustomerRegister from './components/CustomerRegister.js';
@@ -16,6 +17,7 @@ function App() {
   return (
     <Router>
         <div className="App">
+            <Navigation />
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/customer-login" element={<CustomerLogin />} />
