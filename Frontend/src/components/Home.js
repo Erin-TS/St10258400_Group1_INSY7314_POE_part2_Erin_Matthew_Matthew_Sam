@@ -1,4 +1,3 @@
-//this is the home page component
 import React from 'react';
 import { Link } from 'react-router-dom';
 import './FormStyles.css';

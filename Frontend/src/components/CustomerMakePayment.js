@@ -1,4 +1,3 @@
-//this it the make payment page for the customer
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';

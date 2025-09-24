@@ -1,6 +1,3 @@
-//thia ia the OTP component so the customer and employee can enter the OTP sent to them to
-// verify their identity so the login process can be completed
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';

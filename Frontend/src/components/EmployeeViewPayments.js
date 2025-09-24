@@ -1,4 +1,3 @@
-//this is the employee view payments component
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';

@@ -1,4 +1,3 @@
-//this is the customer registration component so the customer can register
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';
