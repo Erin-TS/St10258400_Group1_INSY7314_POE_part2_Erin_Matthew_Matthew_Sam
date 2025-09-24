@@ -27,11 +27,13 @@
     font-weight: bold;
     text-decoration: none;
     margin-left: 0.5rem;
+    padding: 0.5rem;
+    transition: background-color 0.3s ease;
 }
 
 .nav-logo:hover {
-    color: #61dafb;
-    transition: all 0.2s ease-out;
+    background-color: #2c5282;
+    color: white;
 }
 
 .nav-menu {
@@ -52,15 +54,12 @@
     text-decoration: none;
     padding: 0.5rem 1rem;
     height: 100%;
-    border-bottom: 3px solid transparent;
-    transition: all 0.3s ease;
+    transition: background-color 0.3s ease;
 }
 
 .nav-links:hover {
     background-color: #2c5282;
     color: white;
-    border-bottom: 3px solid #61dafb;
-    border-radius: 0;
 }
 
 /* Responsive Design */
