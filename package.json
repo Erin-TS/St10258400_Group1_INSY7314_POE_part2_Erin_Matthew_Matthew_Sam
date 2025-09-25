@@ -2,9 +2,15 @@
   "name": "st10258400_group1_insy7314_poe_part2_erin_matthew_matthew_sam",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"No tests specified\""
+    "test": "echo \"No tests specified\"",
+    "start": "webpack serve --mode development --open",
+    "dev": "concurrently \"nodemon server.js\" \"webpack serve --mode development\"",
+    "server": "node server.js",
+    "server:dev": "nodemon server.js",
+    "frontend": "webpack serve --mode development --open",
+    "build": "webpack --mode production"
   },
   "keywords": [],
   "author": "",
@@ -13,9 +19,25 @@
     "bcrypt": "^6.0.0",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
-    "express-session": "^1.18.2"
+    "express-brute": "^1.0.1",
+    "express-session": "^1.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "@babel/core": "^7.28.4",
+    "@babel/preset-env": "^7.28.3",
+    "@babel/preset-react": "^7.27.1",
+    "babel-loader": "^10.0.0",
+    "concurrently": "^9.2.1",
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.4",
+    "nodemon": "^3.1.10",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2"
   }
 }
