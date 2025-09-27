@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -40,10 +41,14 @@ app.post('/api/login', async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
 
+        // For simplicity, allow login without accountNumber for employees
+        const isValid = (username === 'testuser' && password === 'password123' && accountNumber === '12345') ||
+                        (username === 'employee' && password === 'password123' && !accountNumber);
 
-        if (username === 'testuser' && password === 'password123' && accountNumber === '12345') {
+        if (isValid) {
+            const userId = username === 'employee' ? 2 : 1;
             const token = jwt.sign(
-                { id: 1, username: username, accountNumber: accountNumber },
+                { id: userId, username: username, accountNumber: accountNumber || null },
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
@@ -52,9 +57,9 @@ app.post('/api/login', async (req, res) => {
                 message: 'Login successful',
                 token: token,
                 user: {
-                    id: 1,
+                    id: userId,
                     username: username,
-                    accountNumber: accountNumber
+                    accountNumber: accountNumber || null
                 }
             });
         } else {

@@ -19,22 +19,35 @@ const CustomerLogin = () => {
         });
     };
 
-    const handleSubmit =  (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        //handle login logic here
-        console.log('Customer login data:', formData);
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            });
 
-        setTimeout(() => {
-            localStorage.setItem('userType', 'customer'); // Store user type in localStorage
-            localStorage.setItem('isLoggedIn', 'false'); // Set true after OTP verification
-            localStorage.setItem('customerData', JSON.stringify(formData)); // Store customer data
+            const data = await response.json();
 
-        //after  login navigate to opt
-        navigate('/otp', { state: { userType: 'customer',from : 'login' } });
-        setLoading(false);
-        }, 2000); // Simulate a 2-second loading time
+            if (response.ok) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('userType', 'customer');
+                localStorage.setItem('user', JSON.stringify(data.user));
+                navigate('/otp', { state: { userType: 'customer', from: 'login' } });
+            } else {
+                alert(data.error || 'Login failed');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('An error occurred during login');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
