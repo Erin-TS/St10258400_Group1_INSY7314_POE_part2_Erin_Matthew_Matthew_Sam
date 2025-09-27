@@ -1,8 +1,10 @@
 const express = require('express');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 
 // Middleware
@@ -10,6 +12,21 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
+
+// JWT Verification Middleware
+const verifyToken = (req, res, next) => {
+    const token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
+    if (!token) {
+        return res.status(401).json({ error: 'Access denied. No token provided.' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token.' });
+    }
+};
 
 // API routes
 
@@ -22,15 +39,18 @@ app.get('/api/test', (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
-        
-        
+
+
         if (username === 'testuser' && password === 'password123' && accountNumber === '12345') {
-            
-            
-            
+            const token = jwt.sign(
+                { id: 1, username: username, accountNumber: accountNumber },
+                JWT_SECRET,
+                { expiresIn: '1h' }
+            );
+
             res.json({
                 message: 'Login successful',
-               
+                token: token,
                 user: {
                     id: 1,
                     username: username,
@@ -47,13 +67,17 @@ app.post('/api/login', async (req, res) => {
 });
 
 
-app.get('/api/protected', (req, res) => {
-    res.json({ 
+app.get('/api/protected', verifyToken, (req, res) => {
+    res.json({
         message: 'This is a protected route',
-       
+        user: req.user
     });
 });
 
+app.post('/api/logout', (req, res) => {
+    // For JWT, logout is handled client-side by removing the token
+    res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+});
 
 app.post('/api/hash-password', async (req, res) => {
     try {
