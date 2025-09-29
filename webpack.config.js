@@ -40,7 +40,12 @@ module.exports = {
         host: 'localhost',
         historyApiFallback: true,
         hot: true,
-        open: false
+        open: false,
+        proxy: [{
+            context: ['/api'],
+            target: 'http://localhost:5000',
+            changeOrigin: true
+        }]
     },
     resolve: {
         extensions: ['.js', '.jsx']
