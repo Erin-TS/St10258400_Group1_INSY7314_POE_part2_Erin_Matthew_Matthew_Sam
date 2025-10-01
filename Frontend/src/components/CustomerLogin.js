@@ -24,58 +24,18 @@ const CustomerLogin = () => {
         e.preventDefault();
         setLoading(true);
 
-        try {
-            // Hash the password before processing
-            const saltRounds = 12; // You can adjust this (10-12 is recommended)
-            const hashedPassword = await bcrypt.hash(formData.password, saltRounds);
-            
-            // Create a copy of formData with the hashed password
-            const formDataWithHashedPassword = {
-                ...formData,
-                password: hashedPassword
-            };
+        //handle login logic here
+        console.log('Customer login data:', formData);
 
-            console.log('Customer login data:', {
-                ...formData,
-                password: '[HIDDEN]' // Don't log the actual hash
-            });
+        setTimeout(() => {
+            localStorage.setItem('userType', 'customer'); // Store user type in localStorage
+            localStorage.setItem('isLoggedIn', 'false'); // Set true after OTP verification
+            localStorage.setItem('customerData', JSON.stringify(formData)); // Store customer data
 
-            // In a real application, you would send the hashed password to your backend
-            // For demo purposes, we'll store the hashed version
-            setTimeout(() => {
-                localStorage.setItem('userType', 'customer');
-                localStorage.setItem('isLoggedIn', 'false');
-                
-                // Store the data with hashed password
-                localStorage.setItem('customerData', JSON.stringify(formDataWithHashedPassword));
-                
-                // Also store the original data (without hash) for demo comparison
-                // In real app, you'd only store the hashed version
-                localStorage.setItem('customerLoginData', JSON.stringify({
-                    accountNumber: formData.accountNumber,
-                    username: formData.username
-                }));
-
-                // Navigate to OTP
-                navigate('/otp', { state: { userType: 'customer', from: 'login' } });
-                setLoading(false);
-            }, 2000);
-
-        } catch (error) {
-            console.error('Error hashing password:', error);
-            setLoading(false);
-            // Handle error (show message to user)
-        }
-    };
-
-    // Helper function to verify password (for future use)
-    const verifyPassword = async (plainPassword, hashedPassword) => {
-        try {
-            return await bcrypt.compare(plainPassword, hashedPassword);
-        } catch (error) {
-            console.error('Error verifying password:', error);
-            return false;
-        }
+        //after  login navigate to opt
+        navigate('/otp', { state: { userType: 'customer',from : 'login' } });
+        setLoading(false);
+        }, 2000); // Simulate a 2-second loading time
     };
 
     return (
