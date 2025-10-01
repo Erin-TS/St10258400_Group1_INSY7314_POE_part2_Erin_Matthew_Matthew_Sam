@@ -1,7 +1,14 @@
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const jwt = require('jsonwebtoken');
+
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+// Import the MongoDB connection
+import db from './db/conn.mjs';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +41,25 @@ const verifyToken = (req, res, next) => {
 // Test route
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Backend server is working!' });
+});
+
+// Test MongoDB connection route
+app.get('/api/db-test', async (req, res) => {
+    try {
+        // Test if we can access the database
+        const result = await db.admin().ping();
+        res.json({ 
+            message: 'MongoDB connection successful!', 
+            database: 'INSY7314-Cluster',
+            ping: result 
+        });
+    } catch (error) {
+        console.error('Database connection error:', error);
+        res.status(500).json({ 
+            error: 'Database connection failed', 
+            details: error.message 
+        });
+    }
 });
 
 
