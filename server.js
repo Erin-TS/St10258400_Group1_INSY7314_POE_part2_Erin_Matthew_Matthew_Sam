@@ -2,8 +2,13 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 // Import the MongoDB connection
 import db from './db/conn.mjs';
+
+// Load environment variables
+dotenv.config();
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
