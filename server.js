@@ -1,8 +1,8 @@
-
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 // Import the MongoDB connection
 import db from './db/conn.mjs';
@@ -82,12 +82,15 @@ app.post('/api/login', async (req, res) => {
         } else {
             // Check database for customers
             const user = await db.collection('users').findOne({ username });
-            if (user && user.password === password) {
-                if (accountNumber && user.accountNumber !== accountNumber) {
-                    return res.status(401).json({ error: 'Invalid credentials' });
+            if (user) {
+                const isPasswordValid = await bcrypt.compare(password, user.password);
+                if (isPasswordValid) {
+                    if (accountNumber && user.accountNumber !== accountNumber) {
+                        return res.status(401).json({ error: 'Invalid credentials' });
+                    }
+                    isValid = true;
+                    userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
                 }
-                isValid = true;
-                userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
             }
         }
 
@@ -135,8 +138,8 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Username already exists' });
         }
 
-        // Store plain text password
-        const plainTextPassword = password;
+        // Hash password with bcrypt
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         // Insert new user
         const result = await db.collection('users').insertOne({
@@ -145,7 +148,7 @@ app.post('/api/register', async (req, res) => {
             idNumber,
             accountNumber,
             username,
-            password: plainTextPassword,
+            password: hashedPassword,
             role: 'customer'
         });
 
@@ -162,8 +165,8 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/hash-password', async (req, res) => {
     try {
         const { password } = req.body;
-       
-        res.json({ message: 'Password hashing disabled for development', password: password });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        res.json({ hashedPassword: hashedPassword });
     } catch (error) {
         res.status(500).json({ error: 'Error processing request' });
     }
@@ -178,5 +181,4 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`Frontend: http://localhost:${PORT}`);
     console.log(`API: http://localhost:${PORT}/api`);
-    console.log(`Security features disabled for development - check TODO comments to enable`);
 });
