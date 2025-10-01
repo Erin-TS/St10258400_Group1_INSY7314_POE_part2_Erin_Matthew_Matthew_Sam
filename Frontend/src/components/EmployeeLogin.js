@@ -22,20 +22,31 @@ const EmployeeLogin = () => {
         e.preventDefault();
         setLoading(true);
 
-        //handle login logic here
-        console.log('Customer login data:', formData);
+        try {
+            const response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData), // accountNumber not included
+            });
 
+            const data = await response.json();
 
-        setTimeout(() => {
-            localStorage.setItem('userType', 'employee');
-            localStorage.setItem('isLoggedIn', 'false'); // Set true after OTP verification
-            localStorage.setItem('employeeData', JSON.stringify(formData)); // Store employee data
-
-
-        //after  login navigate to opt
-        navigate('/otp', { state: { userType: 'employee', from: 'login' } });
-      setLoading(false);
-    }, 2000); // Simulate a 2-second loading time
+            if (response.ok) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('userType', 'employee');
+                localStorage.setItem('user', JSON.stringify(data.user));
+                navigate('/otp', { state: { userType: 'employee', from: 'login' } });
+            } else {
+                alert(data.error || 'Login failed');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('An error occurred during login');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (

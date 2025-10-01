@@ -1,3 +1,4 @@
+
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -8,8 +9,10 @@ import db from './db/conn.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 
 // Middleware
@@ -17,6 +20,21 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
+
+// JWT Verification Middleware
+const verifyToken = (req, res, next) => {
+    const token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
+    if (!token) {
+        return res.status(401).json({ error: 'Access denied. No token provided.' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token.' });
+    }
+};
 
 // API routes
 
@@ -48,19 +66,26 @@ app.get('/api/db-test', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
-        
-        
-        if (username === 'testuser' && password === 'password123' && accountNumber === '12345') {
-            
-            
-            
+
+        // For simplicity, allow login without accountNumber for employees
+        const isValid = (username === 'testuser' && password === 'password123' && accountNumber === '12345') ||
+                        (username === 'employee' && password === 'password123' && !accountNumber);
+
+        if (isValid) {
+            const userId = username === 'employee' ? 2 : 1;
+            const token = jwt.sign(
+                { id: userId, username: username, accountNumber: accountNumber || null },
+                JWT_SECRET,
+                { expiresIn: '1h' }
+            );
+
             res.json({
                 message: 'Login successful',
-               
+                token: token,
                 user: {
-                    id: 1,
+                    id: userId,
                     username: username,
-                    accountNumber: accountNumber
+                    accountNumber: accountNumber || null
                 }
             });
         } else {
@@ -73,13 +98,17 @@ app.post('/api/login', async (req, res) => {
 });
 
 
-app.get('/api/protected', (req, res) => {
-    res.json({ 
+app.get('/api/protected', verifyToken, (req, res) => {
+    res.json({
         message: 'This is a protected route',
-       
+        user: req.user
     });
 });
 
+app.post('/api/logout', (req, res) => {
+    // For JWT, logout is handled client-side by removing the token
+    res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+});
 
 app.post('/api/hash-password', async (req, res) => {
     try {

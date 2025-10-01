@@ -19,12 +19,12 @@ const CustomerMakePayment = () => {
 
     useEffect(() => {
         //check if user is logged in and is a customer
-        const isLoggedIn = localStorage.getItem('isLoggedIn');
+        const token = localStorage.getItem('token');
         const userType = localStorage.getItem('userType');
 
-        if (!isLoggedIn || userType !== 'customer') {
+        if (!token || userType !== 'customer') {
             alert('Please login as a customer to access this page');
-            navigate('/CustomerLogin');
+            navigate('/customer-login');
             return;
         }
     }, [navigate]);
@@ -60,10 +60,16 @@ const CustomerMakePayment = () => {
         }, 2000); // Simulate a 2-second loading time
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('isLoggedIn');
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+        localStorage.removeItem('token');
         localStorage.removeItem('userType');
-        navigate('/CustomerLogin');
+        localStorage.removeItem('user');
+        navigate('/customer-login');
     }
 
     return (

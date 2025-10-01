@@ -7,7 +7,7 @@
   "scripts": {
     "test": "echo \"No tests specified\"",
     "start": "webpack serve --mode development --open",
-    "dev": "concurrently \"nodemon server.js\" \"webpack serve --mode development\"",
+    "dev": "nodemon server.js",
     "server": "node server.js",
     "server:dev": "nodemon server.js",
     "frontend": "webpack serve --mode development --open",
@@ -21,7 +21,7 @@
     "dotenv": "^17.2.3",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
-    "express-brute": "^1.0.1",
+    "express-rate-limit": "^8.1.0",
     "express-session": "^1.18.2",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.20.0",
