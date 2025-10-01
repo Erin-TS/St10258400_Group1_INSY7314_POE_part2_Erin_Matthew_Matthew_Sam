@@ -2,8 +2,13 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 // Import the MongoDB connection
 import db from './db/conn.mjs';
+
+// Load environment variables
+dotenv.config();
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -67,14 +72,28 @@ app.post('/api/login', async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
 
-        // For simplicity, allow login without accountNumber for employees
-        const isValid = (username === 'testuser' && password === 'password123' && accountNumber === '12345') ||
-                        (username === 'employee' && password === 'password123' && !accountNumber);
+        let isValid = false;
+        let userData = null;
+
+        if (username === 'employee' && password === 'password123' && !accountNumber) {
+            // Hardcoded employee login
+            isValid = true;
+            userData = { id: 2, username: 'employee', accountNumber: null };
+        } else {
+            // Check database for customers
+            const user = await db.collection('users').findOne({ username });
+            if (user && user.password === password) {
+                if (accountNumber && user.accountNumber !== accountNumber) {
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+                isValid = true;
+                userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
+            }
+        }
 
         if (isValid) {
-            const userId = username === 'employee' ? 2 : 1;
             const token = jwt.sign(
-                { id: userId, username: username, accountNumber: accountNumber || null },
+                { id: userData.id, username: userData.username, accountNumber: userData.accountNumber },
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
@@ -82,11 +101,7 @@ app.post('/api/login', async (req, res) => {
             res.json({
                 message: 'Login successful',
                 token: token,
-                user: {
-                    id: userId,
-                    username: username,
-                    accountNumber: accountNumber || null
-                }
+                user: userData
             });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });
@@ -108,6 +123,40 @@ app.get('/api/protected', verifyToken, (req, res) => {
 app.post('/api/logout', (req, res) => {
     // For JWT, logout is handled client-side by removing the token
     res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+});
+
+app.post('/api/register', async (req, res) => {
+    try {
+        const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
+
+        // Check if user already exists
+        const existingUser = await db.collection('users').findOne({ username });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+
+        // Store plain text password
+        const plainTextPassword = password;
+
+        // Insert new user
+        const result = await db.collection('users').insertOne({
+            firstName,
+            lastName,
+            idNumber,
+            accountNumber,
+            username,
+            password: plainTextPassword,
+            role: 'customer'
+        });
+
+        res.json({
+            message: 'Registration successful',
+            userId: result.insertedId
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/api/hash-password', async (req, res) => {

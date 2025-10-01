@@ -38,20 +38,40 @@ const CustomerRegister = () => {
 
         setLoading(true);
 
-        //registration to be implemented logic here
-        console.log('Customer registration data:', formData);
+        try {
+            const response = await fetch('/api/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    idNumber: formData.idNumber,
+                    accountNumber: formData.accountNumber,
+                    username: formData.username,
+                    password: formData.password
+                })
+            });
 
+            const data = await response.json();
 
-        setTimeout(() => {
-            alert('Registration successful! Please login.');
-            //clear existing login data
-            localStorage.removeItem('userType');
-            localStorage.removeItem('isLoggedIn');
+            if (response.ok) {
+                alert('Registration successful! Please login.');
+                //clear existing login data
+                localStorage.removeItem('userType');
+                localStorage.removeItem('isLoggedIn');
 
-            //navigate to customer login after registration
-            navigate('/CustomerLogin');
+                //navigate to customer login after registration
+                navigate('/CustomerLogin');
+            } else {
+                alert(data.error || 'Registration failed');
+            }
+        } catch (error) {
+            alert('Registration failed');
+        } finally {
             setLoading(false);
-        }, 2000); // Simulate a 2-second loading time
+        }
     };
     
     return (
