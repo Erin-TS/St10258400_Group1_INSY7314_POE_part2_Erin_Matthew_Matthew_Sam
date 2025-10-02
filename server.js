@@ -1,8 +1,8 @@
-
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 // Import the MongoDB connection
 import db from './db/conn.mjs';
@@ -14,11 +14,9 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
-
 
 // Middleware
 app.use(express.json());
@@ -67,7 +65,6 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
@@ -76,18 +73,22 @@ app.post('/api/login', async (req, res) => {
         let userData = null;
 
         if (username === 'employee' && password === 'password123' && !accountNumber) {
-            // Hardcoded employee login
+            // Hardcoded employee login for demonstration purposes
             isValid = true;
             userData = { id: 2, username: 'employee', accountNumber: null };
         } else {
-            // Check database for customers
+            // Fetch user from the database
             const user = await db.collection('users').findOne({ username });
-            if (user && user.password === password) {
-                if (accountNumber && user.accountNumber !== accountNumber) {
-                    return res.status(401).json({ error: 'Invalid credentials' });
+            if (user) {
+                // Bcrypt is used to compare the entered password with the stored hash
+                const isPasswordValid = await bcrypt.compare(password, user.password);
+                if (isPasswordValid) {
+                    if (accountNumber && user.accountNumber !== accountNumber) {
+                        return res.status(401).json({ error: 'Invalid credentials' });
+                    }
+                    isValid = true;
+                    userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
                 }
-                isValid = true;
-                userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
             }
         }
 
@@ -112,7 +113,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-
 app.get('/api/protected', verifyToken, (req, res) => {
     res.json({
         message: 'This is a protected route',
@@ -135,17 +135,18 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Username already exists' });
         }
 
-        // Store plain text password
-        const plainTextPassword = password;
+        // Hash and salt the password using bcrypt
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Insert new user
+        // Insert new user with hashed password
         const result = await db.collection('users').insertOne({
             firstName,
             lastName,
             idNumber,
             accountNumber,
             username,
-            password: plainTextPassword,
+            password: hashedPassword,
             role: 'customer'
         });
 
@@ -162,13 +163,23 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/hash-password', async (req, res) => {
     try {
         const { password } = req.body;
-       
-        res.json({ message: 'Password hashing disabled for development', password: password });
+        
+        if (!password) {
+            return res.status(400).json({ error: 'Password is required' });
+        }
+        
+        // Hash the password using bcrypt
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        
+        res.json({ 
+            message: 'Password hashed successfully'
+        });
     } catch (error) {
+        console.error('Hash password error:', error);
         res.status(500).json({ error: 'Error processing request' });
     }
 });
-
 
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
@@ -178,5 +189,4 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`Frontend: http://localhost:${PORT}`);
     console.log(`API: http://localhost:${PORT}/api`);
-    console.log(`Security features disabled for development - check TODO comments to enable`);
 });
