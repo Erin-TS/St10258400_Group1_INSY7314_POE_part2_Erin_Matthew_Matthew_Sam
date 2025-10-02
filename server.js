@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
 // Import the MongoDB connection
+import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 
 // Load environment variables
@@ -90,8 +91,15 @@ app.post('/api/login', async (req, res) => {
                     if (accountNumber && user.accountNumber !== accountNumber) {
                         return res.status(401).json({ error: 'Invalid credentials' });
                     }
+                
                     isValid = true;
-                    userData = { id: user._id, username: user.username, accountNumber: user.accountNumber };
+                    userData = { 
+                        id: user._id, 
+                        username: user.username, 
+                        accountNumber: user.accountNumber,
+                        role: user.role,
+                        totpEnabled: user.totpEnabled || false 
+                    };
                 }
             }
         }
@@ -106,7 +114,8 @@ app.post('/api/login', async (req, res) => {
             res.json({
                 message: 'Login successful',
                 token: token,
-                user: userData
+                user: userData,
+                requiresMFA: true
             });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });
