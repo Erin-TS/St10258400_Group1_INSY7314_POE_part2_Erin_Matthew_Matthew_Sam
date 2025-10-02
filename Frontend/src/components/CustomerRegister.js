@@ -77,9 +77,10 @@ const CustomerRegister = () => {
                 //clear existing login data
                 localStorage.removeItem('userType');
                 localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('token');
 
                 //navigate to customer login after registration
-                navigate('/customer-login');
+              window.location.href = '/customer-login'; 
     };
 
     if (showQRCode && qrCodeData) {

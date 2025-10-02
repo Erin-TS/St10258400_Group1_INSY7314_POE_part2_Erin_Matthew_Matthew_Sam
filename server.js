@@ -78,9 +78,22 @@ app.post('/api/login', async (req, res) => {
         let userData = null;
 
         if (username === 'employee' && password === 'password123' && !accountNumber) {
-            // Hardcoded employee login for demonstration purposes
-            isValid = true;
-            userData = { id: 2, username: 'employee', accountNumber: null };
+            const employeeUser = await db.collection('users').findOne({ username: 'employee' });
+
+            if (employeeUser) {
+                isValid= true;
+                userData = { 
+                    id: employeeUser._id,
+                    username: employeeUser.username,
+                    accountNumber: employeeUser.accountNumber,
+                    role: employeeUser.role,
+                    totpEnabled: employeeUser.totpEnabled || false 
+                };
+            }else{
+                return res.status(401).json({ error: 'Employee not configured' });
+            }
+
+      
         } else {
             // Fetch user from the database
             const user = await db.collection('users').findOne({ username });
