@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate ,Link} from 'react-router-dom';
 import './FormStyles.css';
 
 const EmployeeLogin = () => {
@@ -28,7 +28,9 @@ const EmployeeLogin = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData), // accountNumber not included
+                body: JSON.stringify(
+                    { username: formData.username, password: formData.password }
+                ), 
             });
 
             const data = await response.json();
