@@ -146,7 +146,7 @@ app.post('/api/register', async (req, res) => {
             idNumber,
             accountNumber,
             username,
-            password: hashedPassword, 
+            password: hashedPassword,
             role: 'customer'
         });
 
