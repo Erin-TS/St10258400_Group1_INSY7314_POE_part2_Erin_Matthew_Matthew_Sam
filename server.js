@@ -157,8 +157,8 @@ app.post('/api/register', async (req, res) => {
 
         // Generate TOTP secret
         const totpSecret = speakeasy.generateSecret({ 
-            name: 'International payments portal (${username})',
-            issuer: 'Inrernational payments portal'
+            name: `International Payments Portal (${username})`,
+            issuer: 'International payments portal'
         });
 
         // Insert new user with hashed password and TOTP secret
@@ -181,10 +181,52 @@ app.post('/api/register', async (req, res) => {
             message: 'Registration successful',
             userId: result.insertedId,
             qrCode: qrCodeUrl,
-            totpSecret: totpSecret.base32 // Send base32 secret for backup
+            secret: totpSecret.base32 // Send base32 secret for backup
         });
+
     } catch (error) {
         console.error('Registration error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+//generate a totp for hardcoded employee user
+app.post('/api/register-employee', async (req, res) => {
+    try {
+        const existingEmployee = await db.collection('users').findOne({ username: 'employee' });
+
+        if (existingEmployee) {
+            return res.status(400).json({ error: 'Employee user already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        const totpSecret = speakeasy.generateSecret({ 
+            name: 'International payments portal (employee)',
+            issuer: 'International payments portal'
+        });
+
+        await db.collection('users').insertOne({
+            firstName: 'Bob',
+            lastName: 'Employee',
+            idNumber: 'EMP001',
+            accountNumber: null,
+            username: 'employee',
+            password: hashedPassword,
+            totpSecret: totpSecret.base32,
+            totpEnabled: true,
+            role: 'employee'
+        });
+
+        const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
+
+        res.json({
+            message: 'Employee user created successfully',
+            qrCode: qrCodeUrl,
+            totpSecret: totpSecret.base32
+        });
+    } catch (error) {
+        console.error('Employee registration error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
