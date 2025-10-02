@@ -173,8 +173,7 @@ app.post('/api/hash-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         
         res.json({ 
-            message: 'Password hashed successfully',
-            hashedPassword: hashedPassword 
+            message: 'Password hashed successfully'
         });
     } catch (error) {
         console.error('Hash password error:', error);
