@@ -47,8 +47,8 @@ const authLimiter = rateLimit({
 app.use(helmet());
 
 // Middleware with request size limits to prevent payload attacks
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
+app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-encoded payload attacks
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
