@@ -170,90 +170,94 @@ const EmployeeViewPayments = () => {
     if (loading) {
         return (
             <div className="form-container">
-                <div className="loading">Loading payments...</div> 
+                <div className="employee-view-container">
+                    <div className="loading">Loading payments...</div>
+                </div>
             </div>
         );
     }
 
     return (
         <div className="form-container">
-            <div className="header-with-logout">
-                <h2>Employee View Payments</h2>
-                <button className="logout-button" onClick={handleLogout}>Logout</button>
-            </div>
-            
-            <div className="filter-container">
-                <label htmlFor="statusFilter">Filter by Status: </label>
-                <select
-                    id="statusFilter"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className="filter-select"
-                >   
-                    <option value="all">All</option>
-                    <option value="pending">Pending</option>
-                    <option value="completed">Completed</option>
-                    <option value="approved">Approved</option>
-                    <option value="failed">Failed</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-            </div>
+            <div className="employee-view-container">
+                <div className="header-with-logout">
+                    <h2>Employee View Payments</h2>
+                    <button className="logout-button" onClick={handleLogout}>Logout</button>
+                </div>
+                
+                <div className="filter-container">
+                    <label htmlFor="statusFilter">Filter by Status:</label>
+                    <select
+                        id="statusFilter"
+                        value={filter}
+                        onChange={(e) => setFilter(e.target.value)}
+                        className="filter-select"
+                    >   
+                        <option value="all">All</option>
+                        <option value="pending">Pending</option>
+                        <option value="completed">Completed</option>
+                        <option value="approved">Approved</option>
+                        <option value="failed">Failed</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
 
-            <div className="table-container">
-                <table className="payments-table">
-                    <thead>
-                        <tr>
-                            <th>Customer Name</th>
-                            <th>Amount</th>
-                            <th>Currency</th>
-                            <th>Payee Name</th>
-                            <th>Bank Name</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Reference</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredPayments.map(payment => (
-                            <tr key={payment.id}>
-                                <td>{payment.customerName}</td>
-                                <td>{payment.amount.toFixed(2)}</td>
-                                <td>{payment.currency}</td>
-                                <td>{payment.payeeName}</td>
-                                <td>{payment.bankName}</td>
-                                <td style={{ color: getStatusColor(payment.status) }}>
-                                    {payment.status}
-                                </td>
-                                <td>{new Date(payment.date).toLocaleDateString()}</td>
-                                <td>{payment.reference}</td>
-                                <td>
-                                    {payment.status.toLowerCase() === 'pending' && (
-                                        <div className="action-buttons">
-                                            <button 
-                                                onClick={() => handleApprove(payment.id)}
-                                                className="approve-button"
-                                            >
-                                                Approve
-                                            </button>
-                                            <button 
-                                                onClick={() => handleReject(payment.id)}
-                                                className="reject-button"
-                                            >
-                                                Reject
-                                            </button>
-                                        </div>
-                                    )}
-                                </td>
+                <div className="table-container">
+                    <table className="payments-table">
+                        <thead>
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Amount</th>
+                                <th>Currency</th>
+                                <th>Payee Name</th>
+                                <th>Bank Name</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Reference</th>
+                                <th>Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody>
+                            {filteredPayments.map(payment => (
+                                <tr key={payment.id}>
+                                    <td>{payment.customerName}</td>
+                                    <td>{payment.amount.toFixed(2)}</td>
+                                    <td>{payment.currency}</td>
+                                    <td>{payment.payeeName}</td>
+                                    <td>{payment.bankName}</td>
+                                    <td style={{ color: getStatusColor(payment.status), fontWeight: 'bold' }}>
+                                        {payment.status}
+                                    </td>
+                                    <td>{new Date(payment.date).toLocaleDateString()}</td>
+                                    <td>{payment.reference}</td>
+                                    <td>
+                                        {payment.status.toLowerCase() === 'pending' && (
+                                            <div className="action-buttons">
+                                                <button 
+                                                    onClick={() => handleApprove(payment.id)}
+                                                    className="approve-button"
+                                                >
+                                                    Approve
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleReject(payment.id)}
+                                                    className="reject-button"
+                                                >
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
 
-            {filteredPayments.length === 0 && (
-                <div className="no-payments">No payments found.</div>
-            )}
+                {filteredPayments.length === 0 && (
+                    <div className="no-payments">No payments found.</div>
+                )}
+            </div>
         </div>
     );
 };
