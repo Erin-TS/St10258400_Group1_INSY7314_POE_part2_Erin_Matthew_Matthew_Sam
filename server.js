@@ -12,6 +12,7 @@ import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
+import helmet from 'helmet'; // Import Helmet for security headers
 
 // Load environment variables
 dotenv.config();
@@ -24,7 +25,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-//Apply rate limiting to all requests
+// Apply rate limiting to all requests
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per window
@@ -32,6 +33,9 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
 });
 app.use(apiLimiter);
+
+// Apply Helmet for security headers
+app.use(helmet());
 
 // Middleware
 app.use(express.json());
@@ -99,11 +103,9 @@ app.post('/api/login', async (req, res) => {
                     role: employeeUser.role,
                     totpEnabled: employeeUser.totpEnabled || false 
                 };
-            }else{
+            } else {
                 return res.status(401).json({ error: 'Employee not configured' });
             }
-
-      
         } else {
             const user = await db.collection('users').findOne({ username });
             if (user) {
