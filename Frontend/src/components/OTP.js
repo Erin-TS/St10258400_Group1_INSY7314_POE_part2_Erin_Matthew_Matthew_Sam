@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './FormStyles.css';
 
 const OTP = () => {
     const [otpValue, setOtpValue] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const [userType, setUserType] = useState(localStorage.getItem('userType') || '');
     const navigate = useNavigate();
     const location = useLocation();
@@ -25,50 +26,77 @@ useEffect(() => {
 }, [location.state, navigate]); 
 
 
-    const handleChange = (e) => {
+    const handleSubmit =  async(e) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
 
+        //totp verification logic 
+        try {
+            const token = localStorage.getItem('token');
 
-        //implement otp logic here
-
-        console.log('OTP entered:',{ otp: otpValue,  userType});
-
-        setTimeout(() => {
+            const response = await fetch('/api/verify-totp', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ token: otpValue })
+            });
+            const data = await response.json();
+            if (response.ok && data.success ) {
+                
             localStorage.setItem('isLoggedIn', 'true'); // Set user as logged in after OTP verification
-
+            
         //navigate to page based on user type
         if(userType === 'customer') {
-            navigate('/CustomerMakePayment');
+            navigate('/customer-make-payment');
         } else if (userType === 'employee') {
-            navigate('/EmployeeViewPayments');
+            navigate('/employee-view-payments');
         }else {
             navigate('/'); // Redirect to home if userType is invalid
         }
-        setLoading(false);
-        }, 2000); // Simulate a 2-second loading time
+    } else {
+        setError(data.error || 'OTP verification failed. Please try again.');
+    }
+        } catch (error) {
+            console.error('OTP verification error:', error);
+            setError('OTP verification failed. Please try again.');
+        }finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div className="form-container">
             <div className="form-card otp-card">
-            
-            <h2>Enter OTP</h2>
-            <form onSubmit={handleChange}>
+                <h2>Enter TOTP</h2>
+                <p className='form-subtitle'>
+                    Please enter the 6-digit code from your authenticator app.
+                </p>
+            <form onSubmit={handleSubmit}>
                 <div className='form-group'>
-                <label>OTP:</label>
+                <label>TOTP:</label>
                 <input
                     type="text"
                     name="otp"
                     value={otpValue}
-                    onChange={(e) => setOtpValue(e.target.value)}
+                    onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, ''); // Remove non-digit characters
+                        if (value.length <= 6) {
+                            setOtpValue(value);
+                            setError('');
+                        }
+                    }}
                     className='form-input'
+                    placeholder='000000'
                     maxLength="6"
-                    minLength="6"
-                    pattern="\d{10}"
+                    pattern="\d{6}"
                     required
+                    autoComplete='off'
                 />
                 </div>
+                {error && <p className="error-message">{error}</p>}
              <button type="submit" disabled={loading} className="form-button">
             {loading ? 'Verifying...' : 'Login'}
           </button>

@@ -15,6 +15,8 @@ const CustomerRegister = () => {
 
     const [captchaChecked, setCaptchaChecked] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showQRCode, setShowQRCode] = useState(false);
+    const [qrCodeData, setQrCodeData] = useState(null);
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -57,13 +59,9 @@ const CustomerRegister = () => {
             const data = await response.json();
 
             if (response.ok) {
-                alert('Registration successful! Please login.');
-                //clear existing login data
-                localStorage.removeItem('userType');
-                localStorage.removeItem('isLoggedIn');
-
-                //navigate to customer login after registration
-                navigate('/CustomerLogin');
+                setQrCodeData(data);
+                setShowQRCode(true);
+                
             } else {
                 alert(data.error || 'Registration failed');
             }
@@ -74,6 +72,45 @@ const CustomerRegister = () => {
         }
     };
     
+    const handleContinueToLogin = () => {
+        alert('Registration successful! Please login.');
+                //clear existing login data
+                localStorage.removeItem('userType');
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('token');
+
+                //navigate to customer login after registration
+              window.location.href = '/customer-login'; 
+    };
+
+    if (showQRCode && qrCodeData) {
+        return (
+            <div className="qr-code-container">
+                <div className="form-card register-card">
+                    <h2>Scan the QR Code to set up TOTP for MFA</h2>
+                    <p className = "form-subtitle">
+                        Please scan the QR code with your authenticator app to set up TOTP for multi-factor authentication.
+                        <br/> You can use apps like Google Authenticator, Authy, or Microsoft Authenticator.
+                    </p>
+                    <div className="qr-code-container">
+                        <img src={qrCodeData.qrCode} alt="TOTP QR Code" className="qr-code-image" />
+                    </div>
+                    <div className="manual-setup">
+                        <p><strong>Manual Code Entry:</strong></p>
+                        <code className="secret-code">{qrCodeData.secret}</code>
+                        <p className="help-text">
+                            If you cannot scan the QR code, you can manually enter the above code into your authenticator app.
+                        </p>
+                    </div>
+                    <button onClick={handleContinueToLogin} className="form-button">
+                        Continue to Login
+                    </button>
+                </div>    
+            </div>
+        );
+      
+    }
+
     return (
         <div className="form-container">
             <div className="form-card register-card">

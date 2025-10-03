@@ -4,9 +4,9 @@ import './FormStyles.css';
 
 const CustomerLogin = () => {
     const[formData, setFormData] = useState({
-        accountNumber: '',
         username: '',
-        password: ''
+        password: '',
+        accountNumber: ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -29,15 +29,19 @@ const CustomerLogin = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData),
-            });
+                body: JSON.stringify({
+                    username: formData.username,
+                    password: formData.password,
+                    accountNumber: formData.accountNumber
+            })
+    });
 
             const data = await response.json();
 
             if (response.ok) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('userType', 'customer');
-                localStorage.setItem('user', JSON.stringify(data.user));
+                
                 navigate('/otp', { state: { userType: 'customer', from: 'login' } });
             } else {
                 alert(data.error || 'Login failed');
