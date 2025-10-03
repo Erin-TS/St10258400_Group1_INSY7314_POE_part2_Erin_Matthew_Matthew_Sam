@@ -354,6 +354,8 @@ app.post('/api/hash-password', async (req, res) => {
     }
 });
 
+
+
 // Serve frontend for all other routes
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
