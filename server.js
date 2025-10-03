@@ -1,4 +1,4 @@
-import express from 'express';
+import express from 'express'; 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
@@ -25,14 +25,21 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Apply rate limiting to all requests
+// Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per window
+    windowMs: 15 * 60 * 1000, 
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
 });
 app.use(apiLimiter);
+
+// Apply specific rate limiting to authentication routes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per window
+    message: { error: 'Too many attempts, please try again later.' }
+});
 
 // Apply Helmet for security headers
 app.use(helmet());
@@ -45,7 +52,7 @@ app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
 // JWT Verification Middleware
 const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
+    const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
@@ -60,12 +67,10 @@ const verifyToken = (req, res, next) => {
 
 // API routes
 
-// Test route
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Backend server is working!' });
 });
 
-// Test MongoDB connection route
 app.get('/api/db-test', async (req, res) => {
     try {
         const result = await db.admin().ping();
@@ -83,8 +88,8 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-// Login route
-app.post('/api/login', async (req, res) => {
+// Login route 
+app.post('/api/login', authLimiter, async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
 
@@ -157,13 +162,13 @@ app.get('/api/protected', verifyToken, (req, res) => {
     });
 });
 
-//logout route
+// Logout route
 app.post('/api/logout', (req, res) => {
     res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
 });
 
 // Registration route
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
     try {
         const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
         const existingUser = await db.collection('users').findOne({ username });
@@ -206,49 +211,8 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-//generate a totp for hardcoded employee user
-app.post('/api/register-employee', async (req, res) => {
-    try {
-        const existingEmployee = await db.collection('users').findOne({ username: 'employee' });
-
-        if (existingEmployee) {
-            return res.status(400).json({ error: 'Employee user already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash('password123', 10);
-
-        const totpSecret = speakeasy.generateSecret({ 
-            name: 'International payments portal (employee)',
-            issuer: 'International payments portal'
-        });
-
-        await db.collection('users').insertOne({
-            firstName: 'Bob',
-            lastName: 'Employee',
-            idNumber: 'EMP001',
-            accountNumber: null,
-            username: 'employee',
-            password: hashedPassword,
-            totpSecret: totpSecret.base32,
-            totpEnabled: true,
-            role: 'employee'
-        });
-
-        const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
-
-        res.json({
-            message: 'Employee user created successfully',
-            qrCode: qrCodeUrl,
-            totpSecret: totpSecret.base32
-        });
-    } catch (error) {
-        console.error('Employee registration error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-//verify totp route
-app.post('/api/verify-totp', verifyToken, async (req, res) => {
+// Verify TOTP 
+app.post('/api/verify-totp', verifyToken, authLimiter, async (req, res) => {
     try {
         const { token: totpToken } = req.body;
         const userId = req.user.id;
@@ -294,7 +258,7 @@ app.post('/api/verify-totp', verifyToken, async (req, res) => {
     }
 });
 
-//setup totp route
+// Setup TOTP 
 app.get('/api/setup-totp', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
