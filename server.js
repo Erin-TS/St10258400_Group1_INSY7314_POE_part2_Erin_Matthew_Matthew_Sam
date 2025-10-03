@@ -11,6 +11,8 @@ import speakeasy from 'speakeasy';
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 
+import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
+
 // Load environment variables
 dotenv.config();
 
@@ -21,6 +23,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+//Apply rate limiting to all requests
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(apiLimiter);
 
 // Middleware
 app.use(express.json());
@@ -53,7 +64,6 @@ app.get('/api/test', (req, res) => {
 // Test MongoDB connection route
 app.get('/api/db-test', async (req, res) => {
     try {
-        // Test if we can access the database
         const result = await db.admin().ping();
         res.json({ 
             message: 'MongoDB connection successful!', 
@@ -95,10 +105,8 @@ app.post('/api/login', async (req, res) => {
 
       
         } else {
-            // Fetch user from the database
             const user = await db.collection('users').findOne({ username });
             if (user) {
-                // Bcrypt is used to compare the entered password with the stored hash
                 const isPasswordValid = await bcrypt.compare(password, user.password);
                 if (isPasswordValid) {
                     if (accountNumber && user.accountNumber !== accountNumber) {
@@ -149,32 +157,26 @@ app.get('/api/protected', verifyToken, (req, res) => {
 
 //logout route
 app.post('/api/logout', (req, res) => {
-    // For JWT, logout is handled client-side by removing the token
     res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
 });
 
 // Registration route
-//generate a totp secret for a user when registering
 app.post('/api/register', async (req, res) => {
     try {
         const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
-        // Check if user already exists
         const existingUser = await db.collection('users').findOne({ username });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
 
-        // Hash and salt the password using bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Generate TOTP secret
         const totpSecret = speakeasy.generateSecret({ 
             name: `International Payments Portal (${username})`,
             issuer: 'International payments portal'
         });
 
-        // Insert new user with hashed password and TOTP secret
         const result = await db.collection('users').insertOne({
             firstName,
             lastName,
@@ -182,19 +184,18 @@ app.post('/api/register', async (req, res) => {
             accountNumber,
             username,
             password: hashedPassword,
-            totpSecret: totpSecret.base32, // Store base32 encoded secret
-            totpEnabled: false, // Initially disabled until after first sucessful login
+            totpSecret: totpSecret.base32,
+            totpEnabled: false,
             role: 'customer'
         });
 
-        // Generate QR code for the TOTP secret
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
 
         res.json({
             message: 'Registration successful',
             userId: result.insertedId,
             qrCode: qrCodeUrl,
-            secret: totpSecret.base32 // Send base32 secret for backup
+            secret: totpSecret.base32
         });
 
     } catch (error) {
@@ -245,13 +246,11 @@ app.post('/api/register-employee', async (req, res) => {
 });
 
 //verify totp route
-//verify a totp token during login
 app.post('/api/verify-totp', verifyToken, async (req, res) => {
     try {
         const { token: totpToken } = req.body;
         const userId = req.user.id;
 
-        // Fetch user from the database
         const user = await db.collection('users').findOne({ 
             $or: [
                 {_id: new ObjectId(userId) },
@@ -262,16 +261,14 @@ app.post('/api/verify-totp', verifyToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Verify the TOTP token
         const isTokenValid = speakeasy.totp.verify({
             secret: user.totpSecret,
             encoding: 'base32',
             token: totpToken,
-            window: 2 // Allow a window of 2 time steps (default is 30 seconds each)
+            window: 2 
         });
 
         if (isTokenValid) {
-            // If TOTP is valid and not yet enabled, enable it now
             if (!user.totpEnabled) {
                 await db.collection('users').updateOne(
                     { _id: user._id },
@@ -296,12 +293,10 @@ app.post('/api/verify-totp', verifyToken, async (req, res) => {
 });
 
 //setup totp route
-//get qr code for existing user to set up 2fa incase they lose their device and need to set it up again
 app.get('/api/setup-totp', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch user from the database
         const user = await db.collection('users').findOne({
             $or: [
                 { _id: new ObjectId(userId) },
@@ -312,7 +307,6 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Generate QR code for the TOTP secret
         const otpAuthUrl = speakeasy.otpauthURL({
             secret: user.totpSecret,
             label: user.username,
@@ -324,7 +318,7 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
 
         res.json({
             qrCode: qrCodeUrl,
-            totpSecret: user.totpSecret // Send base32 secret for backup
+            totpSecret: user.totpSecret
         });
     } catch (error) {
         console.error('Setup TOTP error:', error);
@@ -341,7 +335,6 @@ app.post('/api/hash-password', async (req, res) => {
             return res.status(400).json({ error: 'Password is required' });
         }
         
-        // Hash the password using bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         
@@ -365,4 +358,3 @@ app.listen(PORT, () => {
     console.log(`Frontend: http://localhost:${PORT}`);
     console.log(`API: http://localhost:${PORT}/api`);
 });
-
