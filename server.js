@@ -27,7 +27,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
+    windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
