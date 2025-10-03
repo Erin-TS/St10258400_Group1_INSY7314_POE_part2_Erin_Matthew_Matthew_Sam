@@ -38,15 +38,17 @@ app.use(apiLimiter);
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 5, // limit each IP to 5 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { error: 'Too many attempts, please try again later.' }
 });
 
 // Apply Helmet for security headers
 app.use(helmet());
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Middleware with request size limits to prevent payload attacks
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
@@ -88,7 +90,7 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-// Login route 
+// Login route with auth rate limiting
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
@@ -167,7 +169,7 @@ app.post('/api/logout', (req, res) => {
     res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
 });
 
-// Registration route
+// Registration route with auth rate limiting
 app.post('/api/register', authLimiter, async (req, res) => {
     try {
         const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
@@ -211,8 +213,49 @@ app.post('/api/register', authLimiter, async (req, res) => {
     }
 });
 
+// Generate a TOTP for hardcoded employee user with auth rate limiting
+app.post('/api/register-employee', authLimiter, async (req, res) => {
+    try {
+        const existingEmployee = await db.collection('users').findOne({ username: 'employee' });
+
+        if (existingEmployee) {
+            return res.status(400).json({ error: 'Employee user already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash('password123', 10);
+
+        const totpSecret = speakeasy.generateSecret({ 
+            name: 'International payments portal (employee)',
+            issuer: 'International payments portal'
+        });
+
+        await db.collection('users').insertOne({
+            firstName: 'Bob',
+            lastName: 'Employee',
+            idNumber: 'EMP001',
+            accountNumber: null,
+            username: 'employee',
+            password: hashedPassword,
+            totpSecret: totpSecret.base32,
+            totpEnabled: true,
+            role: 'employee'
+        });
+
+        const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
+
+        res.json({
+            message: 'Employee user created successfully',
+            qrCode: qrCodeUrl,
+            totpSecret: totpSecret.base32
+        });
+    } catch (error) {
+        console.error('Employee registration error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Verify TOTP 
-app.post('/api/verify-totp', verifyToken, authLimiter, async (req, res) => {
+app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
     try {
         const { token: totpToken } = req.body;
         const userId = req.user.id;
@@ -318,9 +361,14 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });
 
-// Start the server
-app.listen(PORT, () => {
+// Start the server with timeout configurations for DDoS protection
+const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     console.log(`Frontend: http://localhost:${PORT}`);
     console.log(`API: http://localhost:${PORT}/api`);
 });
+
+// Configuring server timeouts 
+server.timeout = 30000; // 30 seconds, kills slow requests
+server.keepAliveTimeout = 5000; // 5 seconds, prevents connection hogging
+server.headersTimeout = 6000; // 6 seconds, must be higher than keepAliveTimeout
