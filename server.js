@@ -429,61 +429,68 @@ app.post("/api/reset-password", async (req, res) => {
   }
 });
 
-// Generate recovery codes
-async function generateRecoveryCodes(userId, db, count = 10) {
+// generate recovery codes route
+app.post('/api/generate-recovery-codes', async (req, res) => {
     try {
+        const userId = req.user?.id || req.body.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: 'Authentication required' });
+        }
 
         // Check if user already has recovery codes
-        const user = await db.collection("users").findOne(
-            { _id: new ObjectId(userId) },
-            { projection: { recoveryCodes: 1 } }
-        );
+    const user = await db.collection("users").findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { recoveryCodes: 1 } }
+    );
 
-        // Prevent regeneration if codes already exist
-        if (user.recoveryCodes && user.recoveryCodes.length > 0) {
-            return {
-                success: false,
-                message: 'Recovery codes already exist for this account',
-                alreadyGenerated: true
-            };
-        }
-
-        const codes = [];
-        const hashedCodes = [];
-
-        // Generate all codes 
-        for (let i = 0; i < count; i++) {
-            const code = crypto.randomBytes(4).toString("hex").toUpperCase();
-            codes.push(code);
-            
-            const hashedCode = await bcrypt.hash(code, 10);
-            hashedCodes.push({
-                code: hashedCode,
-                used: false
-            });
-        }
-
-        // Store codes in database
-        await db.collection("users").updateOne(
-            { _id: new ObjectId(userId) },
-            { 
-                $set: { 
-                    recoveryCodes: hashedCodes,
-                    recoveryCodesGeneratedAt: new Date()
-                } 
-            }
-        );
-
-        return {
-            success: true,
-            codes: codes
-        };
-
-    } catch (error) {
-        console.error('Error generating recovery codes:', error);
-        throw error;
+    if (user?.recoveryCodes && user.recoveryCodes.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Recovery codes already exist for this account",
+        alreadyGenerated: true 
+      });
     }
-}
+    // Generate 10 recovery codes
+    const codes = [];
+    const hashedCodes = [];
+
+    for (let i = 0; i < 10; i++) {
+      const code = crypto.randomBytes(4).toString("hex").toUpperCase();
+      codes.push(code);
+      
+      const hashedCode = await bcrypt.hash(code, 10);
+      hashedCodes.push({
+        code: hashedCode,
+        used: false,
+        createdAt: new Date()
+      });
+    }
+
+    // Save to database
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      { 
+        $set: { 
+          recoveryCodes: hashedCodes,
+          recoveryCodesGeneratedAt: new Date()
+        } 
+      }
+    );
+
+    res.status(200).json({ 
+      success: true, 
+      codes: codes // Send plain codes to user (only time they'll see them)
+    });
+
+  } catch (error) {
+    console.error("Generate recovery codes error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error generating recovery codes" 
+    });
+  }
+});
 
 // Serve frontend for all other routes
 app.use((req, res) => {
