@@ -10,6 +10,8 @@ import speakeasy from 'speakeasy';
 // Import the MongoDB connection
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
+// Import crypto for generating recovery codes
+import crypto from 'crypto';
 
 // Load environment variables
 dotenv.config();
@@ -354,7 +356,134 @@ app.post('/api/hash-password', async (req, res) => {
     }
 });
 
+// Verify recovery code route
+// Verify recovery code and issue a reset token
+app.post("/api/verify-recovery-code", async (req, res) => {
+  try {
+    const { recoveryCode } = req.body;
 
+    // Find user with matching recovery code
+    const user = await db.collection("users").findOne({ recoveryCodes: { $exists: true } });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    let isValid = false;
+    let remainingCodes = [];
+
+    for (const hashedCode of user.recoveryCodes) {
+      if (await bcrypt.compare(recoveryCode, hashedCode)) {
+        isValid = true;
+      } else {
+        remainingCodes.push(hashedCode);
+      }
+    }
+
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: "Invalid recovery code" });
+    }
+
+    // Remove used recovery code
+    await db.collection("users").updateOne(
+      { _id: user._id },
+      { $set: { recoveryCodes: remainingCodes } }
+    );
+
+    const resetToken = jwt.sign(
+      { userId: user._id.toString(), purpose: "password-reset" },
+      process.env.JWT_SECRET,
+      { expiresIn: "10m" }
+    );
+
+    res.status(200).json({ success: true, resetToken });
+  } catch (error) {
+    console.error("Verify recovery code error:", error);
+    res.status(500).json({ success: false, message: "Error verifying recovery code" });
+  }
+});
+
+// Reset password route
+app.post("/api/reset-password", async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
+    }
+
+    if (decoded.purpose !== "password-reset") {
+      return res.status(400).json({ success: false, message: "Invalid reset token" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(decoded.userId) },
+      { $set: { password: hashedPassword } }
+    );
+
+    res.status(200).json({ success: true, message: "Password reset successful" });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    res.status(500).json({ success: false, message: "Error resetting password" });
+  }
+});
+
+// Generate recovery codes
+async function generateRecoveryCodes(userId, db, count = 10) {
+    try {
+
+        // Check if user already has recovery codes
+        const user = await db.collection("users").findOne(
+            { _id: new ObjectId(userId) },
+            { projection: { recoveryCodes: 1 } }
+        );
+
+        // Prevent regeneration if codes already exist
+        if (user.recoveryCodes && user.recoveryCodes.length > 0) {
+            return {
+                success: false,
+                message: 'Recovery codes already exist for this account',
+                alreadyGenerated: true
+            };
+        }
+
+        const codes = [];
+        const hashedCodes = [];
+
+        // Generate all codes 
+        for (let i = 0; i < count; i++) {
+            const code = crypto.randomBytes(4).toString("hex").toUpperCase();
+            codes.push(code);
+            
+            const hashedCode = await bcrypt.hash(code, 10);
+            hashedCodes.push({
+                code: hashedCode,
+                used: false
+            });
+        }
+
+        // Store codes in database
+        await db.collection("users").updateOne(
+            { _id: new ObjectId(userId) },
+            { 
+                $set: { 
+                    recoveryCodes: hashedCodes,
+                    recoveryCodesGeneratedAt: new Date()
+                } 
+            }
+        );
+
+        return {
+            success: true,
+            codes: codes
+        };
+
+    } catch (error) {
+        console.error('Error generating recovery codes:', error);
+        throw error;
+    }
+}
 
 // Serve frontend for all other routes
 app.use((req, res) => {
