@@ -435,9 +435,21 @@ app.post("/api/reset-password", async (req, res) => {
 });
 
 // generate recovery codes route
-app.post('/api/generate-recovery-codes', verifyToken,async (req, res) => {
+app.post('/api/generate-recovery-codes', async (req, res) => {
     try {
-        const userId = req.body.userId;
+
+        let userId;
+        // If userId is provided in the body (for registration), use it
+        if (req.user && req.user.id) {
+            userId = req.user.id;
+        } else if (req.body.userId) {
+            userId = req.body.userId;
+        } else {
+            return res.status(400).json({ 
+                success: false, 
+                message: "User ID is required to generate recovery codes" 
+            });
+        }
 
         // Check if user already has recovery codes
         const user = await db.collection("users").findOne(
