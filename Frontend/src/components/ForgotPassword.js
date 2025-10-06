@@ -68,11 +68,8 @@ const handlePasswordSubmit = async (e) => {
       if (!data.success) throw new Error(data.message);
 
       alert('Password reset successful! Please login with your new password.');
-      // Clear any existing login data
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userType');
-
-      // Navigate to login page
+      sessionStorage.clear();
+      
       navigate('/customer-login');
     } catch (error) {
       alert(error.message || 'Error resetting password');

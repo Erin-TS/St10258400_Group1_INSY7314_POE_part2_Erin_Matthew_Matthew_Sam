@@ -155,13 +155,8 @@ const CustomerRegister = () => {
         }
 
         alert('Registration successful! Please login.');
-                //clear existing login data
-                localStorage.removeItem('userType');
-                localStorage.removeItem('isLoggedIn');
-                localStorage.removeItem('token');
-
-                //navigate to customer login after registration
-              window.location.href = '/customer-login'; 
+                sessionStorage.clear();
+                window.location.href = '/customer-login'; 
     };
 
     // Show Recovery Codes Section

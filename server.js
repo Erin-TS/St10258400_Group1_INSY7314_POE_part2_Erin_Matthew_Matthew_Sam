@@ -1,44 +1,118 @@
-import express from 'express';
+import express from 'express'; 
+import https from 'https';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-// 2Fa libraries
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
-// Import the MongoDB connection
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
+
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
 import { ok } from 'assert';
 
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { getCertificatePaths } from './utils/generateCerts.js';
+import cookieParser from 'cookie-parser';
+import session from 'express-session';
+import crypto from 'crypto';
+
+
 // Load environment variables
 dotenv.config();
 
-// ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
+const HTTP_PORT = process.env.HTTP_PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Apply general rate limiting to all requests
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(apiLimiter);
+
+// Apply specific rate limiting to authentication routes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many attempts, please try again later.' }
+});
+
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "frame-ancestors": ["'none'"]
+        }
+    },
+    frameguard: { action: 'deny' },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
+}));
+
+// Middleware with request size limits to prevent payload attacks
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
+
+app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: HTTPS_ENABLED,
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: 3600000
+    }
+}));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
-// JWT Verification Middleware
+const generateFingerprint = (req) => {
+    const userAgent = req.headers['user-agent'] || '';
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    
+    const fingerprintData = `${userAgent}|${ip}`;
+    return crypto.createHash('sha256').update(fingerprintData).digest('hex');
+};
+
+const getClientIP = (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+};
+
 const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
+    const token = req.cookies.authToken;
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        
+        const currentFingerprint = generateFingerprint(req);
+        if (decoded.fingerprint !== currentFingerprint) {
+            return res.status(401).json({ error: 'Session fingerprint mismatch. Please log in again.' });
+        }
+        
         req.user = decoded;
         next();
     } catch (error) {
@@ -48,15 +122,12 @@ const verifyToken = (req, res, next) => {
 
 // API routes
 
-// Test route
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Backend server is working!' });
 });
 
-// Test MongoDB connection route
 app.get('/api/db-test', async (req, res) => {
     try {
-        // Test if we can access the database
         const result = await db.admin().ping();
         res.json({ 
             message: 'MongoDB connection successful!', 
@@ -72,8 +143,8 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-// Login route
-app.post('/api/login', async (req, res) => {
+// Login route with auth rate limiting
+app.post('/api/login', authLimiter, async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
 
@@ -92,16 +163,12 @@ app.post('/api/login', async (req, res) => {
                     role: employeeUser.role,
                     totpEnabled: employeeUser.totpEnabled || false 
                 };
-            }else{
+            } else {
                 return res.status(401).json({ error: 'Employee not configured' });
             }
-
-      
         } else {
-            // Fetch user from the database
             const user = await db.collection('users').findOne({ username });
             if (user) {
-                // Bcrypt is used to compare the entered password with the stored hash
                 const isPasswordValid = await bcrypt.compare(password, user.password);
                 if (isPasswordValid) {
                     if (accountNumber && user.accountNumber !== accountNumber) {
@@ -121,15 +188,34 @@ app.post('/api/login', async (req, res) => {
         }
 
         if (isValid) {
+            const fingerprint = generateFingerprint(req);
+            const clientIP = getClientIP(req);
+            const userAgent = req.headers['user-agent'] || 'unknown';
+            
             const token = jwt.sign(
-                { id: userData.id, username: userData.username, accountNumber: userData.accountNumber },
+                { 
+                    id: userData.id, 
+                    username: userData.username, 
+                    accountNumber: userData.accountNumber,
+                    fingerprint: fingerprint,
+                    ip: clientIP,
+                    ua: userAgent,
+                    role: userData.role,
+                    iat: Math.floor(Date.now() / 1000)
+                },
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
 
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                secure: HTTPS_ENABLED,
+                sameSite: 'strict',
+                maxAge: 3600000
+            });
+
             res.json({
                 message: 'Login successful',
-                token: token,
                 user: userData,
                 requiresMFA: true
             });
@@ -150,34 +236,34 @@ app.get('/api/protected', verifyToken, (req, res) => {
     });
 });
 
-//logout route
+// Logout route
 app.post('/api/logout', (req, res) => {
-    // For JWT, logout is handled client-side by removing the token
-    res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+    res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: HTTPS_ENABLED,
+        sameSite: 'strict'
+    });
+    req.session.destroy();
+    res.json({ message: 'Logged out successfully.' });
 });
 
-// Registration route
-//generate a totp secret for a user when registering
-app.post('/api/register', async (req, res) => {
+// Registration route with auth rate limiting
+app.post('/api/register', authLimiter, async (req, res) => {
     try {
         const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
-        // Check if user already exists
         const existingUser = await db.collection('users').findOne({ username });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
 
-        // Hash and salt the password using bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // Generate TOTP secret
         const totpSecret = speakeasy.generateSecret({ 
             name: `International Payments Portal (${username})`,
             issuer: 'International payments portal'
         });
 
-        // Insert new user with hashed password and TOTP secret
         const result = await db.collection('users').insertOne({
             firstName,
             lastName,
@@ -192,7 +278,6 @@ app.post('/api/register', async (req, res) => {
             recoveryCodesGeneratedAt: null
         });
 
-        // Generate QR code for the TOTP secret
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
 
         res.json({
@@ -209,8 +294,8 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-//generate a totp for hardcoded employee user
-app.post('/api/register-employee', async (req, res) => {
+// Generate a TOTP for hardcoded employee user with auth rate limiting
+app.post('/api/register-employee', authLimiter, async (req, res) => {
     try {
         const existingEmployee = await db.collection('users').findOne({ username: 'employee' });
 
@@ -250,14 +335,12 @@ app.post('/api/register-employee', async (req, res) => {
     }
 });
 
-//verify totp route
-//verify a totp token during login
-app.post('/api/verify-totp', verifyToken, async (req, res) => {
+// Verify TOTP 
+app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
     try {
         const { token: totpToken } = req.body;
         const userId = req.user.id;
 
-        // Fetch user from the database
         const user = await db.collection('users').findOne({ 
             $or: [
                 {_id: new ObjectId(userId) },
@@ -268,16 +351,14 @@ app.post('/api/verify-totp', verifyToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Verify the TOTP token
         const isTokenValid = speakeasy.totp.verify({
             secret: user.totpSecret,
             encoding: 'base32',
             token: totpToken,
-            window: 2 // Allow a window of 2 time steps (default is 30 seconds each)
+            window: 2 
         });
 
         if (isTokenValid) {
-            // If TOTP is valid and not yet enabled, enable it now
             if (!user.totpEnabled) {
                 await db.collection('users').updateOne(
                     { _id: user._id },
@@ -306,13 +387,11 @@ app.post('/api/verify-totp', verifyToken, async (req, res) => {
     }
 });
 
-//setup totp route
-//get qr code for existing user to set up 2fa incase they lose their device and need to set it up again
+// Setup TOTP 
 app.get('/api/setup-totp', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch user from the database
         const user = await db.collection('users').findOne({
             $or: [
                 { _id: new ObjectId(userId) },
@@ -323,7 +402,6 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Generate QR code for the TOTP secret
         const otpAuthUrl = speakeasy.otpauthURL({
             secret: user.totpSecret,
             label: user.username,
@@ -335,7 +413,7 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
 
         res.json({
             qrCode: qrCodeUrl,
-            totpSecret: user.totpSecret // Send base32 secret for backup
+            totpSecret: user.totpSecret
         });
     } catch (error) {
         console.error('Setup TOTP error:', error);
@@ -352,7 +430,6 @@ app.post('/api/hash-password', async (req, res) => {
             return res.status(400).json({ error: 'Password is required' });
         }
         
-        // Hash the password using bcrypt
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
         
@@ -483,12 +560,38 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });
 
-app.use(express.json());
-
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Frontend: http://localhost:${PORT}`);
-    console.log(`API: http://localhost:${PORT}/api`);
-});
-
+if (HTTPS_ENABLED) {
+    const credentials = getCertificatePaths();
+    
+    const httpsServer = https.createServer(credentials, app);
+    
+    httpsServer.timeout = 30000;
+    httpsServer.keepAliveTimeout = 5000;
+    httpsServer.headersTimeout = 6000;
+    
+    httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS Server is running on port ${HTTPS_PORT}`);
+        console.log(`   Frontend: https://localhost:${HTTPS_PORT}`);
+        console.log(`   API: https://localhost:${HTTPS_PORT}/api`);
+    });
+    
+    const httpApp = express();
+    httpApp.use((req, res) => {
+        res.redirect(301, `https://${req.headers.host.replace(/:\d+$/, `:${HTTPS_PORT}`)}${req.url}`);
+    });
+    
+    const httpServer = http.createServer(httpApp);
+    httpServer.listen(HTTP_PORT, () => {
+        console.log(`🔓 HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
+    });
+} else {
+    const server = app.listen(HTTP_PORT, () => {
+        console.log(`⚠️  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
+        console.log(`   Frontend: http://localhost:${HTTP_PORT}`);
+        console.log(`   API: http://localhost:${HTTP_PORT}/api`);
+    });
+    
+    server.timeout = 30000;
+    server.keepAliveTimeout = 5000;
+    server.headersTimeout = 6000;
+}
