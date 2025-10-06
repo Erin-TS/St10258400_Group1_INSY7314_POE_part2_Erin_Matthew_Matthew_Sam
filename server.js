@@ -12,6 +12,7 @@ import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
+import { ok } from 'assert';
 
 // Load environment variables
 dotenv.config();
@@ -368,7 +369,8 @@ app.post('/api/hash-password', async (req, res) => {
 app.post('/api/verify-recovery-code', async (req, res) => {
     try {
         const { username, recoveryCode } = req.body;
-        if (!username || !recoveryCode)
+        console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
+        if (!username || !recoveryCode)           
         return res.status(400).json({ success: false, message: 'Username and code required' });
 
         const user = await db.collection('users').findOne({ username });
@@ -379,23 +381,27 @@ app.post('/api/verify-recovery-code', async (req, res) => {
         let valid = false;
         const remaining = [];
 
+    
         for (const hash of user.recoveryCodes) {
-        if (!valid && (await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash))) valid = true;
+        const ok = await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash);
+       
+        if (!valid && ok) valid = true;
         else remaining.push(hash);
         }
 
         if (!valid) return res.status(400).json({ success: false, message: 'Invalid code' });
 
         // delete used code
-        await db.collection('users').updateOne(
-        { _id: user._id },
-        { $set: { recoveryCodes: remaining } }
+        const up = await db.collection('users').updateOne(        
+            { _id: new ObjectId(user._id) },                     
+            { $set: { recoveryCodes: remaining } }
         );
+        console.log('>>> update matched:', up.matchedCount, 'modified:', up.modifiedCount); 
 
         const resetToken = jwt.sign(
-        { userId: user._id.toString(), purpose: 'password-reset' },
-        process.env.JWT_SECRET,
-        { expiresIn: '10m' }
+            { userId: user._id.toString(), purpose: 'password-reset' },
+            process.env.JWT_SECRET,
+            { expiresIn: '10m' }
         );
 
         res.json({ success: true, resetToken, remainingCodes: remaining.length });
@@ -476,6 +482,8 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });
+
+app.use(express.json());
 
 // Start the server
 app.listen(PORT, () => {

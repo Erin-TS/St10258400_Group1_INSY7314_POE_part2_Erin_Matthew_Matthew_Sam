@@ -1,47 +1,51 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import './FormStyles.css';
+import './FormStyles.css'; 
 
 const ForgotPassword = () => {
-  const [step, setStep] = useState(1); // 1: recovery code, 2: new password
-  const [formData, setFormData] = useState({
-    recoveryCode: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [resetToken, setResetToken] = useState(null); 
-  const navigate = useNavigate();
+const [step, setStep] = useState(1); // 1: recovery code, 2: new password
+const [formData, setFormData] = useState({
+  username: '',
+  recoveryCode: '',
+  newPassword: '',
+  confirmPassword: ''
+});
 
-  const handleCodeSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+const [loading, setLoading] = useState(false);
+const [resetToken, setResetToken] = useState(null); 
+const navigate = useNavigate();
 
-    try {
-      const res = await fetch('/api/verify-recovery-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: formData.username,
-          recoveryCode: formData.recoveryCode.trim().toUpperCase()
-         })
-      });
+const handleChange = e =>
+  setFormData({ ...formData, [e.target.name]: e.target.value });
 
-      const data = await res.json();
-      if (!data.success) throw new Error(data.message);
-      
-      alert('Code verified! Please enter your new password.');
-      setResetToken(data.resetToken); // Store the reset token
-      setStep(2);
-    } catch (error) {
-      alert(error.message || 'Failed to verify code');
-    } finally {
-      setLoading(false);
-    }
+const handleCodeSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    const res = await fetch('/api/verify-recovery-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: formData.username,
+        recoveryCode: formData.recoveryCode.trim().toUpperCase()
+      })
+    });
+
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
     
-  };
+    alert('Code verified! Please enter your new password.');
+    setResetToken(data.resetToken); // Store the reset token
+    setStep(2);
+  } catch (error) {
+    alert(error.message || 'Failed to verify code');
+  } finally {
+    setLoading(false);
+  }
+  
+};
 
-  const handlePasswordSubmit = async (e) => {
+const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
     if (formData.newPassword !== formData.confirmPassword) {
@@ -86,6 +90,18 @@ const ForgotPassword = () => {
           <form onSubmit={handleCodeSubmit}>
             <p className="form-subtitle">Enter one of your recovery codes</p>
             <div className="form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                name="username"
+                placeholder="Your username"
+                value={formData.username || ''}
+                onChange={handleChange}
+                className="form-input"
+                required
+              />
+            </div>
+            <div className="form-group">
               <label>Recovery Code</label>
               <input
                 type="text"
@@ -94,7 +110,7 @@ const ForgotPassword = () => {
                 value={formData.recoveryCode}
                 onChange={handleChange}
                 className="form-input"
-                maxLength="6"
+                maxLength="8"
                 required
               />
             </div>
