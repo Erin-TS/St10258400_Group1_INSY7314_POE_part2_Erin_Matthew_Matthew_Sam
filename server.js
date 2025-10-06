@@ -43,16 +43,16 @@ const authLimiter = rateLimit({
     message: { error: 'Too many attempts, please try again later.' }
 });
 
-// Apply Helmet for security headers
-app.use(helmet());
-
-
-//extra clickjacking protection headers that is not provided by helmet and is explicitly set
-app.use((req, res, next) => {
-    res.setHeader('X-Frame-Options', 'DENY');// Prevent embedding in iframes for older browsers
-    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'"); // Prevent embedding in iframes form modern browsers
-    next();// Ensure to call next() to proceed to the next middleware
-});
+// Apply Helmet with comprehensive security including clickjacking protection
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "frame-ancestors": ["'none'"]  // Clickjacking protection for modern browsers
+        }
+    },
+    frameguard: { action: 'deny' }  // X-Frame-Options: DENY for older browsers
+}));
 
 // Middleware with request size limits to prevent payload attacks
 app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
