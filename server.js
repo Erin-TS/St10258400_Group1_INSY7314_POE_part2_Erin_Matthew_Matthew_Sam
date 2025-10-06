@@ -13,6 +13,9 @@ import db from './db/conn.mjs';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
+import cookieParser from 'cookie-parser';
+import session from 'express-session';
+import crypto from 'crypto';
 
 // Load environment variables
 dotenv.config();
@@ -24,6 +27,7 @@ const app = express();
 const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 const HTTP_PORT = process.env.HTTP_PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+const SESSION_SECRET = process.env.SESSION_SECRET;
 const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
 // Apply general rate limiting to all requests
@@ -60,19 +64,49 @@ app.use(helmet({
 }));
 
 // Middleware with request size limits to prevent payload attacks
-app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
-app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-encoded payload attacks
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
+
+app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: HTTPS_ENABLED,
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: 3600000
+    }
+}));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
-// JWT Verification Middleware
+const generateFingerprint = (req) => {
+    const userAgent = req.headers['user-agent'] || '';
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    
+    const fingerprintData = `${userAgent}|${ip}`;
+    return crypto.createHash('sha256').update(fingerprintData).digest('hex');
+};
+
+const getClientIP = (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+};
+
 const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1];
+    const token = req.cookies.authToken;
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        
+        const currentFingerprint = generateFingerprint(req);
+        if (decoded.fingerprint !== currentFingerprint) {
+            return res.status(401).json({ error: 'Session fingerprint mismatch. Please log in again.' });
+        }
+        
         req.user = decoded;
         next();
     } catch (error) {
@@ -148,15 +182,34 @@ app.post('/api/login', authLimiter, async (req, res) => {
         }
 
         if (isValid) {
+            const fingerprint = generateFingerprint(req);
+            const clientIP = getClientIP(req);
+            const userAgent = req.headers['user-agent'] || 'unknown';
+            
             const token = jwt.sign(
-                { id: userData.id, username: userData.username, accountNumber: userData.accountNumber },
+                { 
+                    id: userData.id, 
+                    username: userData.username, 
+                    accountNumber: userData.accountNumber,
+                    fingerprint: fingerprint,
+                    ip: clientIP,
+                    ua: userAgent,
+                    role: userData.role,
+                    iat: Math.floor(Date.now() / 1000)
+                },
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
 
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                secure: HTTPS_ENABLED,
+                sameSite: 'strict',
+                maxAge: 3600000
+            });
+
             res.json({
                 message: 'Login successful',
-                token: token,
                 user: userData,
                 requiresMFA: true
             });
@@ -179,7 +232,13 @@ app.get('/api/protected', verifyToken, (req, res) => {
 
 // Logout route
 app.post('/api/logout', (req, res) => {
-    res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+    res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: HTTPS_ENABLED,
+        sameSite: 'strict'
+    });
+    req.session.destroy();
+    res.json({ message: 'Logged out successfully.' });
 });
 
 // Registration route with auth rate limiting

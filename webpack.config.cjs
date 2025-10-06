@@ -52,7 +52,8 @@ module.exports = {
             context: ['/api'],
             target: 'https://localhost:5443',
             changeOrigin: true,
-            secure: false
+            secure: false,
+            credentials: true
         }]
     },
     resolve: {

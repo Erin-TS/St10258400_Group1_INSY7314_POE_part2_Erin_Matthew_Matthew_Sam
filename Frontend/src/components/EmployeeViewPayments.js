@@ -9,10 +9,9 @@ const EmployeeViewPayments = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        //check if user is logged in and is an employee
-        const token = localStorage.getItem('token');
-        const userType = localStorage.getItem('userType');
-        if (!token || userType !== 'employee') {
+        const isAuthenticated = sessionStorage.getItem('isAuthenticated');
+        const userType = sessionStorage.getItem('userType');
+        if (isAuthenticated !== 'true' || userType !== 'employee') {
             alert('Please login to access the employee dashboard');
             navigate('/employee-login');
             return;
@@ -24,12 +23,8 @@ const EmployeeViewPayments = () => {
     const fetchPayments = async () => {
         setLoading(true);
         try {
-            // Try to fetch from backend first
-            const token = localStorage.getItem('token');
             const response = await fetch('/api/payments', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
             const data = await response.json();
             setPayments(data);
@@ -83,24 +78,22 @@ const EmployeeViewPayments = () => {
 
     const handleLogout = async () => {
         try {
-            await fetch('/api/logout', { method: 'POST' });
+            await fetch('/api/logout', { 
+                method: 'POST',
+                credentials: 'include'
+            });
         } catch (error) {
             console.error('Logout error:', error);
         }
-        localStorage.removeItem('token');
-        localStorage.removeItem('userType');
-        localStorage.removeItem('user');
+        sessionStorage.clear();
         navigate('/employee-login');
     };
 
     const handleApprove = async (paymentId) => {
         try {
-            const token = localStorage.getItem('token');
             const response = await fetch(`/api/payments/${paymentId}/approve`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
             if (response.ok) {
                 fetchPayments();
@@ -122,12 +115,9 @@ const EmployeeViewPayments = () => {
 
     const handleReject = async (paymentId) => {
         try {
-            const token = localStorage.getItem('token');
             const response = await fetch(`/api/payments/${paymentId}/reject`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                credentials: 'include'
             });
             if (response.ok) {
                 fetchPayments();
