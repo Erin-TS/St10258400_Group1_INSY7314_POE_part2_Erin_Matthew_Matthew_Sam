@@ -64,11 +64,8 @@ const ForgotPassword = () => {
     
     setTimeout(() => {
       alert('Password reset successful! Please login with your new password.');
-      // Clear any existing login data
-      localStorage.removeItem('isLoggedIn');
-      localStorage.removeItem('userType');
+      sessionStorage.clear();
       
-      // Navigate to login page
       navigate('/customer-login');
       setLoading(false);
     }, 1500);

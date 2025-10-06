@@ -6,22 +6,20 @@ const OTP = () => {
     const [otpValue, setOtpValue] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [userType, setUserType] = useState(localStorage.getItem('userType') || '');
+    const [userType, setUserType] = useState(sessionStorage.getItem('userType') || '');
     const navigate = useNavigate();
     const location = useLocation();
 
 useEffect(() => {
-    //get user type from local storage or navigation state
     const typeFromState = location.state?.userType;
-    const typeFromStorage = localStorage.getItem('userType');
+    const typeFromStorage = sessionStorage.getItem('userType');
 
     if (typeFromState) {
         setUserType(typeFromState);
     } else if (typeFromStorage) {
         setUserType(typeFromStorage);
     }else {
-        //return to home if no user type found
-        navigate('/'); // Redirect to home
+        navigate('/');
     }
 }, [location.state, navigate]); 
 
@@ -31,30 +29,26 @@ useEffect(() => {
         setLoading(true);
         setError('');
 
-        //totp verification logic 
         try {
-            const token = localStorage.getItem('token');
-
             const response = await fetch('/api/verify-totp', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({ token: otpValue })
             });
             const data = await response.json();
             if (response.ok && data.success ) {
                 
-            localStorage.setItem('isLoggedIn', 'true'); // Set user as logged in after OTP verification
+            sessionStorage.setItem('isAuthenticated', 'true');
             
-        //navigate to page based on user type
         if(userType === 'customer') {
             navigate('/customer-make-payment');
         } else if (userType === 'employee') {
             navigate('/employee-view-payments');
         }else {
-            navigate('/'); // Redirect to home if userType is invalid
+            navigate('/');
         }
     } else {
         setError(data.error || 'OTP verification failed. Please try again.');
