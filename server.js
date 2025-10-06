@@ -436,9 +436,16 @@ app.post('/api/reset-password', async (req, res) => {
 app.post('/api/generate-recovery-codes', async (req, res) => {
     try {
         const { userId } = req.body;
-        if (!userId) return res.status(400).json({ success: false, message: 'User ID required' });
+        console.log('Recovery codes request - userId:', userId);
+        
+        if (!userId) {
+            console.log('Error: No userId provided');
+            return res.status(400).json({ success: false, message: 'User ID required' });
+        }
 
         const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+        console.log('User found:', user ? 'Yes' : 'No');
+        
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
         if (user.recoveryCodes?.length)   // already generated
