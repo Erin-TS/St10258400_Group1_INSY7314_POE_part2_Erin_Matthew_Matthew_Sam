@@ -1,29 +1,30 @@
 import express from 'express'; 
+import https from 'https';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-// 2Fa libraries
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
-// Import the MongoDB connection
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
-
-import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
-import helmet from 'helmet'; // Import Helmet for security headers
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { getCertificatePaths } from './utils/generateCerts.js';
 
 // Load environment variables
 dotenv.config();
 
-// ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
+const HTTP_PORT = process.env.HTTP_PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
@@ -43,15 +44,19 @@ const authLimiter = rateLimit({
     message: { error: 'Too many attempts, please try again later.' }
 });
 
-// Apply Helmet with comprehensive security including clickjacking protection
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "frame-ancestors": ["'none'"]  // Clickjacking protection for modern browsers
+            "frame-ancestors": ["'none'"]
         }
     },
-    frameguard: { action: 'deny' }  // X-Frame-Options: DENY for older browsers
+    frameguard: { action: 'deny' },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
 }));
 
 // Middleware with request size limits to prevent payload attacks
@@ -364,19 +369,42 @@ app.post('/api/hash-password', async (req, res) => {
     }
 });
 
-// Serve frontend for all other routes
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });
 
-// Start the server with timeout configurations for DDoS protection
-const server = app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Frontend: http://localhost:${PORT}`);
-    console.log(`API: http://localhost:${PORT}/api`);
-});
-
-// Configuring server timeouts 
-server.timeout = 30000; // 30 seconds, kills slow requests
-server.keepAliveTimeout = 5000; // 5 seconds, prevents connection hogging
-server.headersTimeout = 6000; // 6 seconds, must be higher than keepAliveTimeout
+if (HTTPS_ENABLED) {
+    const credentials = getCertificatePaths();
+    
+    const httpsServer = https.createServer(credentials, app);
+    
+    httpsServer.timeout = 30000;
+    httpsServer.keepAliveTimeout = 5000;
+    httpsServer.headersTimeout = 6000;
+    
+    httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS Server is running on port ${HTTPS_PORT}`);
+        console.log(`   Frontend: https://localhost:${HTTPS_PORT}`);
+        console.log(`   API: https://localhost:${HTTPS_PORT}/api`);
+    });
+    
+    const httpApp = express();
+    httpApp.use((req, res) => {
+        res.redirect(301, `https://${req.headers.host.replace(/:\d+$/, `:${HTTPS_PORT}`)}${req.url}`);
+    });
+    
+    const httpServer = http.createServer(httpApp);
+    httpServer.listen(HTTP_PORT, () => {
+        console.log(`🔓 HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
+    });
+} else {
+    const server = app.listen(HTTP_PORT, () => {
+        console.log(`⚠️  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
+        console.log(`   Frontend: http://localhost:${HTTP_PORT}`);
+        console.log(`   API: http://localhost:${HTTP_PORT}/api`);
+    });
+    
+    server.timeout = 30000;
+    server.keepAliveTimeout = 5000;
+    server.headersTimeout = 6000;
+}
