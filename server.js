@@ -46,6 +46,14 @@ const authLimiter = rateLimit({
 // Apply Helmet for security headers
 app.use(helmet());
 
+
+//extra clickjacking protection headers that is not provided by helmet and is explicitly set
+app.use((req, res, next) => {
+    res.setHeader('X-Frame-Options', 'DENY');// Prevent embedding in iframes for older browsers
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'"); // Prevent embedding in iframes form modern browsers
+    next();// Ensure to call next() to proceed to the next middleware
+});
+
 // Middleware with request size limits to prevent payload attacks
 app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-encoded payload attacks
