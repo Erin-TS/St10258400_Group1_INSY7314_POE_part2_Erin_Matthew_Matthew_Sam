@@ -87,8 +87,8 @@ app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-e
 // MongoDB NoSQL Injection Protection - sanitizes user input
 app.use(mongoSanitize({
     replaceWith: '_', // Replace prohibited characters with underscore
-    onSanitize: ({ req, key }) => {
-        console.warn(`Potential NoSQL injection attempt detected - Sanitized key: ${key}`);
+    onSanitize: () => {
+        console.warn('Potential NoSQL injection attempt detected and sanitized.');
     }
 }));
 
