@@ -46,8 +46,6 @@ const authLimiter = rateLimit({
 // Apply Helmet for security headers
 app.use(helmet());
 
-//clickjacking protection with helmet x-frame-options header
-app.use(helmet.frameguard({ action: 'deny' })); // Prevent embedding in iframes
 
 //extra clickjacking protection headers that is not provided by helmet and is explicitly set
 app.use((req, res, next) => {
