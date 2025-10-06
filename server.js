@@ -35,8 +35,8 @@ const loginSchema = Joi.object({
 });
 
 const registerSchema = Joi.object({
-    firstName: Joi.string().min(2).max(50).required(),
-    lastName: Joi.string().min(2).max(50).required(),
+    firstName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
+    lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
     idNumber: Joi.string().min(5).max(20).required(),
     accountNumber: Joi.string().alphanum().min(5).max(20).required(),
     username: Joi.string().alphanum().min(3).max(30).required(),
