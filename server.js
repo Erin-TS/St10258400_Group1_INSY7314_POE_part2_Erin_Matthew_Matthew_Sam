@@ -1,13 +1,13 @@
 import express from 'express'; 
+import https from 'https';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-// 2Fa libraries
 import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
-// Import the MongoDB connection
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 
@@ -15,17 +15,30 @@ import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
 import mongoSanitize from 'express-mongo-sanitize'; // Import MongoDB sanitization
 import Joi from 'joi'; // Import Joi for input validation
+// Import crypto for generating recovery codes
+import crypto from 'crypto';
+import { ok } from 'assert';
+
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import { getCertificatePaths } from './utils/generateCerts.js';
+import cookieParser from 'cookie-parser';
+import session from 'express-session';
+import crypto from 'crypto';
+
 
 // Load environment variables
 dotenv.config();
 
-// ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
+const HTTP_PORT = process.env.HTTP_PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
 // Joi Validation Schemas
 const loginSchema = Joi.object({
@@ -69,20 +82,37 @@ const authLimiter = rateLimit({
     message: { error: 'Too many attempts, please try again later.' }
 });
 
-// Apply Helmet with comprehensive security including clickjacking protection
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "frame-ancestors": ["'none'"]  // Clickjacking protection for modern browsers
+            "frame-ancestors": ["'none'"]
         }
     },
-    frameguard: { action: 'deny' }  // X-Frame-Options: DENY for older browsers
+    frameguard: { action: 'deny' },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
 }));
 
 // Middleware with request size limits to prevent payload attacks
-app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
-app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-encoded payload attacks
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser());
+
+app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: HTTPS_ENABLED,
+        httpOnly: true,
+        sameSite: 'strict',
+        maxAge: 3600000
+    }
+}));
 
 // MongoDB NoSQL Injection Protection - sanitizes user input
 app.use(mongoSanitize({
@@ -94,14 +124,31 @@ app.use(mongoSanitize({
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
-// JWT Verification Middleware
+const generateFingerprint = (req) => {
+    const userAgent = req.headers['user-agent'] || '';
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    
+    const fingerprintData = `${userAgent}|${ip}`;
+    return crypto.createHash('sha256').update(fingerprintData).digest('hex');
+};
+
+const getClientIP = (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+};
+
 const verifyToken = (req, res, next) => {
-    const token = req.headers['authorization']?.split(' ')[1];
+    const token = req.cookies.authToken;
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        
+        const currentFingerprint = generateFingerprint(req);
+        if (decoded.fingerprint !== currentFingerprint) {
+            return res.status(401).json({ error: 'Session fingerprint mismatch. Please log in again.' });
+        }
+        
         req.user = decoded;
         next();
     } catch (error) {
@@ -183,15 +230,34 @@ app.post('/api/login', authLimiter, async (req, res) => {
         }
 
         if (isValid) {
+            const fingerprint = generateFingerprint(req);
+            const clientIP = getClientIP(req);
+            const userAgent = req.headers['user-agent'] || 'unknown';
+            
             const token = jwt.sign(
-                { id: userData.id, username: userData.username, accountNumber: userData.accountNumber },
+                { 
+                    id: userData.id, 
+                    username: userData.username, 
+                    accountNumber: userData.accountNumber,
+                    fingerprint: fingerprint,
+                    ip: clientIP,
+                    ua: userAgent,
+                    role: userData.role,
+                    iat: Math.floor(Date.now() / 1000)
+                },
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
 
+            res.cookie('authToken', token, {
+                httpOnly: true,
+                secure: HTTPS_ENABLED,
+                sameSite: 'strict',
+                maxAge: 3600000
+            });
+
             res.json({
                 message: 'Login successful',
-                token: token,
                 user: userData,
                 requiresMFA: true
             });
@@ -214,7 +280,13 @@ app.get('/api/protected', verifyToken, (req, res) => {
 
 // Logout route
 app.post('/api/logout', (req, res) => {
-    res.json({ message: 'Logged out successfully. Please remove the token from client storage.' });
+    res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: HTTPS_ENABLED,
+        sameSite: 'strict'
+    });
+    req.session.destroy();
+    res.json({ message: 'Logged out successfully.' });
 });
 
 // Registration route with auth rate limiting and validation
@@ -248,9 +320,11 @@ app.post('/api/register', authLimiter, async (req, res) => {
             accountNumber,
             username,
             password: hashedPassword,
-            totpSecret: totpSecret.base32,
-            totpEnabled: false,
-            role: 'customer'
+            totpSecret: totpSecret.base32, // Store base32 encoded secret
+            totpEnabled: false, // Initially disabled until after first sucessful login
+            role: 'customer',
+            recoveryCodes: [], // No recovery codes initially
+            recoveryCodesGeneratedAt: null
         });
 
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
@@ -259,7 +333,8 @@ app.post('/api/register', authLimiter, async (req, res) => {
             message: 'Registration successful',
             userId: result.insertedId,
             qrCode: qrCodeUrl,
-            secret: totpSecret.base32
+            secret: totpSecret.base32, // Send base32 secret for backup
+            
         });
 
     } catch (error) {
@@ -346,9 +421,14 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
                 );
             }
 
+            // check if  user needs recovery codes
+            // User needs recovery codes if they don't have any saved
+            const needsRecoveryCodes = !user.recoveryCodes || user.recoveryCodes.length === 0;
+
             res.json({ 
                 message: 'TOTP verification successful',
-                success: true
+                success: true,
+                needsRecoveryCodes: needsRecoveryCodes
             });
         } else {
             res.status(401).json({ 
@@ -419,19 +499,156 @@ app.post('/api/hash-password', async (req, res) => {
     }
 });
 
+// Verify recovery code route
+app.post('/api/verify-recovery-code', async (req, res) => {
+    try {
+        const { username, recoveryCode } = req.body;
+        console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
+        if (!username || !recoveryCode)           
+        return res.status(400).json({ success: false, message: 'Username and code required' });
+
+        const user = await db.collection('users').findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        if (!user.recoveryCodes?.length)
+        return res.status(400).json({ success: false, message: 'No recovery codes' });
+
+        let valid = false;
+        const remaining = [];
+
+    
+        for (const hash of user.recoveryCodes) {
+        const ok = await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash);
+       
+        if (!valid && ok) valid = true;
+        else remaining.push(hash);
+        }
+
+        if (!valid) return res.status(400).json({ success: false, message: 'Invalid code' });
+
+        // delete used code
+        const up = await db.collection('users').updateOne(        
+            { _id: new ObjectId(user._id) },                     
+            { $set: { recoveryCodes: remaining } }
+        );
+        console.log('>>> update matched:', up.matchedCount, 'modified:', up.modifiedCount); 
+
+        const resetToken = jwt.sign(
+            { userId: user._id.toString(), purpose: 'password-reset' },
+            process.env.JWT_SECRET,
+            { expiresIn: '10m' }
+        );
+
+        res.json({ success: true, resetToken, remainingCodes: remaining.length });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Reset password route
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+        if (!resetToken || !newPassword)
+        return res.status(400).json({ success: false, message: 'Token and password required' });
+
+        let decoded;
+        try { decoded = jwt.verify(resetToken, process.env.JWT_SECRET); }
+        catch { return res.status(400).json({ success: false, message: 'Invalid or expired token' }); }
+
+        if (decoded.purpose !== 'password-reset')
+        return res.status(400).json({ success: false, message: 'Bad token' });
+
+        const hash = await bcrypt.hash(newPassword, 10);
+        await db.collection('users').updateOne(
+        { _id: new ObjectId(decoded.userId) },
+        { $set: { password: hash } }
+        );
+
+        res.json({ success: true, message: 'Password reset – please log in again' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// generate recovery codes after MFA setup
+app.post('/api/generate-recovery-codes', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        console.log('Recovery codes request - userId:', userId);
+        
+        if (!userId) {
+            console.log('Error: No userId provided');
+            return res.status(400).json({ success: false, message: 'User ID required' });
+        }
+
+        const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+        console.log('User found:', user ? 'Yes' : 'No');
+        
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (user.recoveryCodes?.length)   // already generated
+        return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
+
+        const plainCodes = [];
+        const hashedCodes = [];
+
+        for (let i = 0; i < 10; i++) {
+        const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8-char
+        plainCodes.push(code);
+        hashedCodes.push(await bcrypt.hash(code, 10));
+        }
+
+        await db.collection('users').updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { recoveryCodes: hashedCodes, recoveryCodesGeneratedAt: new Date() } }
+        );
+
+        res.json({ success: true, codes: plainCodes });   // ONLY time user sees them
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 // Serve frontend for all other routes
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });
 
-// Start the server with timeout configurations for DDoS protection
-const server = app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Frontend: http://localhost:${PORT}`);
-    console.log(`API: http://localhost:${PORT}/api`);
-});
-
-// Configuring server timeouts 
-server.timeout = 30000; // 30 seconds, kills slow requests
-server.keepAliveTimeout = 5000; // 5 seconds, prevents connection hogging
-server.headersTimeout = 6000; // 6 seconds, must be higher than keepAliveTimeout
+if (HTTPS_ENABLED) {
+    const credentials = getCertificatePaths();
+    
+    const httpsServer = https.createServer(credentials, app);
+    
+    httpsServer.timeout = 30000;
+    httpsServer.keepAliveTimeout = 5000;
+    httpsServer.headersTimeout = 6000;
+    
+    httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS Server is running on port ${HTTPS_PORT}`);
+        console.log(`   Frontend: https://localhost:${HTTPS_PORT}`);
+        console.log(`   API: https://localhost:${HTTPS_PORT}/api`);
+    });
+    
+    const httpApp = express();
+    httpApp.use((req, res) => {
+        res.redirect(301, `https://${req.headers.host.replace(/:\d+$/, `:${HTTPS_PORT}`)}${req.url}`);
+    });
+    
+    const httpServer = http.createServer(httpApp);
+    httpServer.listen(HTTP_PORT, () => {
+        console.log(`🔓 HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
+    });
+} else {
+    const server = app.listen(HTTP_PORT, () => {
+        console.log(`⚠️  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
+        console.log(`   Frontend: http://localhost:${HTTP_PORT}`);
+        console.log(`   API: http://localhost:${HTTP_PORT}/api`);
+    });
+    
+    server.timeout = 30000;
+    server.keepAliveTimeout = 5000;
+    server.headersTimeout = 6000;
+}

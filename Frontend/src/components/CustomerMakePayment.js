@@ -18,11 +18,10 @@ const CustomerMakePayment = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        //check if user is logged in and is a customer
-        const token = localStorage.getItem('token');
-        const userType = localStorage.getItem('userType');
+        const isAuthenticated = sessionStorage.getItem('isAuthenticated');
+        const userType = sessionStorage.getItem('userType');
 
-        if (!token || userType !== 'customer') {
+        if (isAuthenticated !== 'true' || userType !== 'customer') {
             alert('Please login as a customer to access this page');
             navigate('/customer-login');
             return;
@@ -62,13 +61,14 @@ const CustomerMakePayment = () => {
 
     const handleLogout = async () => {
         try {
-            await fetch('/api/logout', { method: 'POST' });
+            await fetch('/api/logout', { 
+                method: 'POST',
+                credentials: 'include'
+            });
         } catch (error) {
             console.error('Logout error:', error);
         }
-        localStorage.removeItem('token');
-        localStorage.removeItem('userType');
-        localStorage.removeItem('user');
+        sessionStorage.clear();
         navigate('/customer-login');
     }
 

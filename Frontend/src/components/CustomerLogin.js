@@ -39,8 +39,8 @@ const CustomerLogin = () => {
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('userType', 'customer');
+                sessionStorage.setItem('userType', 'customer');
+                sessionStorage.setItem('isAuthenticated', 'pending');
                 
                 navigate('/otp', { state: { userType: 'customer', from: 'login' } });
             } else {

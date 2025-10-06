@@ -41,10 +41,19 @@ module.exports = {
         historyApiFallback: true,
         hot: true,
         open: false,
+        server: {
+            type: 'https',
+            options: {
+                key: path.join(__dirname, 'certs', 'key.pem'),
+                cert: path.join(__dirname, 'certs', 'cert.pem')
+            }
+        },
         proxy: [{
             context: ['/api'],
-            target: 'http://localhost:5000',
-            changeOrigin: true
+            target: 'https://localhost:5443',
+            changeOrigin: true,
+            secure: false,
+            credentials: true
         }]
     },
     resolve: {
