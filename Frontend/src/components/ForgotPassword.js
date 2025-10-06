@@ -22,7 +22,9 @@ const ForgotPassword = () => {
       const res = await fetch('/api/verify-recovery-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: formData.recoveryCode })
+        body: JSON.stringify({ username: formData.username,
+          recoveryCode: formData.recoveryCode.trim().toUpperCase()
+         })
       });
 
       const data = await res.json();

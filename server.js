@@ -186,7 +186,9 @@ app.post('/api/register', async (req, res) => {
             password: hashedPassword,
             totpSecret: totpSecret.base32, // Store base32 encoded secret
             totpEnabled: false, // Initially disabled until after first sucessful login
-            role: 'customer'
+            role: 'customer',
+            recoveryCodes: [], // No recovery codes initially
+            recoveryCodesGeneratedAt: null
         });
 
         // Generate QR code for the TOTP secret
@@ -196,7 +198,8 @@ app.post('/api/register', async (req, res) => {
             message: 'Registration successful',
             userId: result.insertedId,
             qrCode: qrCodeUrl,
-            secret: totpSecret.base32 // Send base32 secret for backup
+            secret: totpSecret.base32, // Send base32 secret for backup
+            
         });
 
     } catch (error) {
@@ -362,146 +365,103 @@ app.post('/api/hash-password', async (req, res) => {
 });
 
 // Verify recovery code route
-// Verify recovery code and issue a reset token
-app.post("/api/verify-recovery-code", async (req, res) => {
-  try {
-    const { recoveryCode } = req.body;
+app.post('/api/verify-recovery-code', async (req, res) => {
+    try {
+        const { username, recoveryCode } = req.body;
+        if (!username || !recoveryCode)
+        return res.status(400).json({ success: false, message: 'Username and code required' });
 
-    // Find user with matching recovery code
-    const user = await db.collection("users").findOne({ recoveryCodes: { $exists: true } });
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+        const user = await db.collection('users').findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        if (!user.recoveryCodes?.length)
+        return res.status(400).json({ success: false, message: 'No recovery codes' });
 
-    let isValid = false;
-    let remainingCodes = [];
+        let valid = false;
+        const remaining = [];
 
-    for (const hashedCode of user.recoveryCodes) {
-      if (await bcrypt.compare(recoveryCode, hashedCode)) {
-        isValid = true;
-      } else {
-        remainingCodes.push(hashedCode);
-      }
+        for (const hash of user.recoveryCodes) {
+        if (!valid && (await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash))) valid = true;
+        else remaining.push(hash);
+        }
+
+        if (!valid) return res.status(400).json({ success: false, message: 'Invalid code' });
+
+        // delete used code
+        await db.collection('users').updateOne(
+        { _id: user._id },
+        { $set: { recoveryCodes: remaining } }
+        );
+
+        const resetToken = jwt.sign(
+        { userId: user._id.toString(), purpose: 'password-reset' },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+        );
+
+        res.json({ success: true, resetToken, remainingCodes: remaining.length });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
-
-    if (!isValid) {
-      return res.status(400).json({ success: false, message: "Invalid recovery code" });
-    }
-
-    // Remove used recovery code
-    await db.collection("users").updateOne(
-      { _id: user._id },
-      { $set: { recoveryCodes: remainingCodes } }
-    );
-
-    const resetToken = jwt.sign(
-      { userId: user._id.toString(), purpose: "password-reset" },
-      process.env.JWT_SECRET,
-      { expiresIn: "10m" }
-    );
-
-    res.status(200).json({ success: true, resetToken });
-  } catch (error) {
-    console.error("Verify recovery code error:", error);
-    res.status(500).json({ success: false, message: "Error verifying recovery code" });
-  }
 });
 
 // Reset password route
-app.post("/api/reset-password", async (req, res) => {
-  try {
-    const { resetToken, newPassword } = req.body;
-
-    let decoded;
+app.post('/api/reset-password', async (req, res) => {
     try {
-      decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
-    }
+        const { resetToken, newPassword } = req.body;
+        if (!resetToken || !newPassword)
+        return res.status(400).json({ success: false, message: 'Token and password required' });
 
-    if (decoded.purpose !== "password-reset") {
-      return res.status(400).json({ success: false, message: "Invalid reset token" });
-    }
+        let decoded;
+        try { decoded = jwt.verify(resetToken, process.env.JWT_SECRET); }
+        catch { return res.status(400).json({ success: false, message: 'Invalid or expired token' }); }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.collection("users").updateOne(
-      { _id: new ObjectId(decoded.userId) },
-      { $set: { password: hashedPassword } }
-    );
+        if (decoded.purpose !== 'password-reset')
+        return res.status(400).json({ success: false, message: 'Bad token' });
 
-    res.status(200).json({ success: true, message: "Password reset successful" });
-  } catch (error) {
-    console.error("Password reset error:", error);
-    res.status(500).json({ success: false, message: "Error resetting password" });
-  }
-});
-
-// generate recovery codes route
-app.post('/api/generate-recovery-codes', async (req, res) => {
-    try {
-
-        let userId;
-        // If userId is provided in the body (for registration), use it
-        if (req.user && req.user.id) {
-            userId = req.user.id;
-        } else if (req.body.userId) {
-            userId = req.body.userId;
-        } else {
-            return res.status(400).json({ 
-                success: false, 
-                message: "User ID is required to generate recovery codes" 
-            });
-        }
-
-        // Check if user already has recovery codes
-        const user = await db.collection("users").findOne(
-        { _id: new ObjectId(userId) },
-        { projection: { recoveryCodes: 1 } }
+        const hash = await bcrypt.hash(newPassword, 10);
+        await db.collection('users').updateOne(
+        { _id: new ObjectId(decoded.userId) },
+        { $set: { password: hash } }
         );
 
-        if (user?.recoveryCodes && user.recoveryCodes.length > 0) {
-        return res.status(400).json({ 
-            success: false, 
-            message: "Recovery codes already exist for this account",
-            alreadyGenerated: true 
-        });
-        }
-        // Generate 10 recovery codes
-        const codes = [];
+        res.json({ success: true, message: 'Password reset – please log in again' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// generate recovery codes after MFA setup
+app.post('/api/generate-recovery-codes', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) return res.status(400).json({ success: false, message: 'User ID required' });
+
+        const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (user.recoveryCodes?.length)   // already generated
+        return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
+
+        const plainCodes = [];
         const hashedCodes = [];
 
         for (let i = 0; i < 10; i++) {
-        const code = crypto.randomBytes(4).toString("hex").toUpperCase();
-        codes.push(code);
-        
-        const hashedCode = await bcrypt.hash(code, 10);
-        hashedCodes.push({
-            code: hashedCode,
-            used: false,
-            createdAt: new Date()
-        });
+        const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8-char
+        plainCodes.push(code);
+        hashedCodes.push(await bcrypt.hash(code, 10));
         }
 
-        // Save to database
-        await db.collection("users").updateOne(
+        await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
-        { 
-            $set: { 
-            recoveryCodes: hashedCodes,
-            recoveryCodesGeneratedAt: new Date()
-            } 
-        }
+        { $set: { recoveryCodes: hashedCodes, recoveryCodesGeneratedAt: new Date() } }
         );
 
-        res.status(200).json({ 
-        success: true, 
-        codes: codes // Send plain codes to user (only time they'll see them)
-        });
-
-    } catch (error) {
-        console.error("Generate recovery codes error:", error);
-        res.status(500).json({ 
-        success: false, 
-        message: "Error generating recovery codes" 
-        });
+        res.json({ success: true, codes: plainCodes });   // ONLY time user sees them
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 

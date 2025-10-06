@@ -17,7 +17,7 @@ const CustomerRegister = () => {
     const [loading, setLoading] = useState(false);
     const [showQRCode, setShowQRCode] = useState(false);
     const [qrCodeData, setQrCodeData] = useState(null);
-    const [showRecoveryCodes, setShowRecoveryCodes] = useState(false); // ← Add this
+    const [showRecoveryCodes, setShowRecoveryCodes] = useState(false); 
     const [recoveryCodes, setRecoveryCodes] = useState([]);
     const [codesSaved, setCodesSaved] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
@@ -80,17 +80,6 @@ const CustomerRegister = () => {
     const handleContinueToRecoveryCodes = async () => {
         setLoading(true);
         try {
-
-            console.log('qrCodeData:', qrCodeData);
-
-            const userId = qrCodeData.userId;
-            console.log('userId being sent:', userId);
-        
-            if (!userId) {
-                alert('User ID not found. Please try registering again.');
-                setLoading(false);
-                return;
-            }
 
             const response = await fetch('/api/generate-recovery-codes', {
                 method: 'POST',
@@ -183,10 +172,11 @@ const CustomerRegister = () => {
                     <h2>Your Recovery Codes</h2>
                     <div className="warning-banner">
                         <strong>Important: Save These Codes!</strong>
-                        <p>These codes can be used to recover your account if you lose access to your authenticator app. Each code can only be used once. Store them in a safe place.</p>
+                        <p>These codes can be used to recover your account if you lose access to your authenticator app. 
+                            Each code can only be used once. Store them in a safe place.</p>
                     </div>
 
-                    <div className="codes-grid">
+                    <div className="">
                         {recoveryCodes.map((code, index) => (
                             <div key={index} className="code-item">
                                 {code}
@@ -194,7 +184,7 @@ const CustomerRegister = () => {
                         ))}
                     </div>
 
-                    <div className="modal-actions">
+                    <div className="">
                         <button 
                             onClick={handleCopyToClipboard}
                             className={`form-button ${copySuccess ? 'success' : ''}`}
@@ -213,12 +203,6 @@ const CustomerRegister = () => {
                         onClick={handleContinueToLogin}
                         className="form-button primary"
                         disabled={!codesSaved}
-                        style={{ 
-                            opacity: codesSaved ? 1 : 0.5, 
-                            cursor: codesSaved ? 'pointer' : 'not-allowed',
-                            width: '100%',
-                            marginTop: '20px'
-                        }}
                     >
                         Continue to Login
                     </button>
