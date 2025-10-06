@@ -61,6 +61,7 @@ useEffect(() => {
         }
     };
 
+
     return (
         <div className="form-container">
             <div className="form-card otp-card">
@@ -68,35 +69,35 @@ useEffect(() => {
                 <p className='form-subtitle'>
                     Please enter the 6-digit code from your authenticator app.
                 </p>
-            <form onSubmit={handleSubmit}>
-                <div className='form-group'>
-                <label>TOTP:</label>
-                <input
-                    type="text"
-                    name="otp"
-                    value={otpValue}
-                    onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, ''); // Remove non-digit characters
-                        if (value.length <= 6) {
-                            setOtpValue(value);
-                            setError('');
-                        }
-                    }}
-                    className='form-input'
-                    placeholder='000000'
-                    maxLength="6"
-                    pattern="\d{6}"
-                    required
-                    autoComplete='off'
-                />
-                </div>
-                {error && <p className="error-message">{error}</p>}
-             <button type="submit" disabled={loading} className="form-button">
-            {loading ? 'Verifying...' : 'Login'}
-          </button>
-            </form>
+                <form onSubmit={handleSubmit}>
+                    <div className='form-group'>
+                        <label>TOTP:</label>
+                        <input
+                            type="text"
+                            name="otp"
+                            value={otpValue}
+                            onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, ''); // Remove non-digit characters
+                                if (value.length <= 6) {
+                                    setOtpValue(value);
+                                    setError('');
+                                }
+                            } }
+                            className='form-input'
+                            placeholder='000000'
+                            maxLength="6"
+                            pattern="\d{6}"
+                            required
+                            autoComplete='off' />
+                    </div>
+                    {error && <p className="error-message">{error}</p>}
+                    <button type="submit" disabled={loading} className="form-button">
+                        {loading ? 'Verifying...' : 'Login'}
+                    </button>
+                </form>
             </div>
-        </div>
+            </div>
+
     );
 };
 

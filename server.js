@@ -10,12 +10,18 @@ import qrcode from 'qrcode';
 import speakeasy from 'speakeasy';
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
+
+// Import crypto for generating recovery codes
+import crypto from 'crypto';
+import { ok } from 'assert';
+
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import crypto from 'crypto';
+
 
 // Load environment variables
 dotenv.config();
@@ -265,9 +271,11 @@ app.post('/api/register', authLimiter, async (req, res) => {
             accountNumber,
             username,
             password: hashedPassword,
-            totpSecret: totpSecret.base32,
-            totpEnabled: false,
-            role: 'customer'
+            totpSecret: totpSecret.base32, // Store base32 encoded secret
+            totpEnabled: false, // Initially disabled until after first sucessful login
+            role: 'customer',
+            recoveryCodes: [], // No recovery codes initially
+            recoveryCodesGeneratedAt: null
         });
 
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
@@ -276,7 +284,8 @@ app.post('/api/register', authLimiter, async (req, res) => {
             message: 'Registration successful',
             userId: result.insertedId,
             qrCode: qrCodeUrl,
-            secret: totpSecret.base32
+            secret: totpSecret.base32, // Send base32 secret for backup
+            
         });
 
     } catch (error) {
@@ -357,9 +366,14 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
                 );
             }
 
+            // check if  user needs recovery codes
+            // User needs recovery codes if they don't have any saved
+            const needsRecoveryCodes = !user.recoveryCodes || user.recoveryCodes.length === 0;
+
             res.json({ 
                 message: 'TOTP verification successful',
-                success: true
+                success: true,
+                needsRecoveryCodes: needsRecoveryCodes
             });
         } else {
             res.status(401).json({ 
@@ -428,6 +442,120 @@ app.post('/api/hash-password', async (req, res) => {
     }
 });
 
+// Verify recovery code route
+app.post('/api/verify-recovery-code', async (req, res) => {
+    try {
+        const { username, recoveryCode } = req.body;
+        console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
+        if (!username || !recoveryCode)           
+        return res.status(400).json({ success: false, message: 'Username and code required' });
+
+        const user = await db.collection('users').findOne({ username });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        if (!user.recoveryCodes?.length)
+        return res.status(400).json({ success: false, message: 'No recovery codes' });
+
+        let valid = false;
+        const remaining = [];
+
+    
+        for (const hash of user.recoveryCodes) {
+        const ok = await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash);
+       
+        if (!valid && ok) valid = true;
+        else remaining.push(hash);
+        }
+
+        if (!valid) return res.status(400).json({ success: false, message: 'Invalid code' });
+
+        // delete used code
+        const up = await db.collection('users').updateOne(        
+            { _id: new ObjectId(user._id) },                     
+            { $set: { recoveryCodes: remaining } }
+        );
+        console.log('>>> update matched:', up.matchedCount, 'modified:', up.modifiedCount); 
+
+        const resetToken = jwt.sign(
+            { userId: user._id.toString(), purpose: 'password-reset' },
+            process.env.JWT_SECRET,
+            { expiresIn: '10m' }
+        );
+
+        res.json({ success: true, resetToken, remainingCodes: remaining.length });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Reset password route
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { resetToken, newPassword } = req.body;
+        if (!resetToken || !newPassword)
+        return res.status(400).json({ success: false, message: 'Token and password required' });
+
+        let decoded;
+        try { decoded = jwt.verify(resetToken, process.env.JWT_SECRET); }
+        catch { return res.status(400).json({ success: false, message: 'Invalid or expired token' }); }
+
+        if (decoded.purpose !== 'password-reset')
+        return res.status(400).json({ success: false, message: 'Bad token' });
+
+        const hash = await bcrypt.hash(newPassword, 10);
+        await db.collection('users').updateOne(
+        { _id: new ObjectId(decoded.userId) },
+        { $set: { password: hash } }
+        );
+
+        res.json({ success: true, message: 'Password reset – please log in again' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// generate recovery codes after MFA setup
+app.post('/api/generate-recovery-codes', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        console.log('Recovery codes request - userId:', userId);
+        
+        if (!userId) {
+            console.log('Error: No userId provided');
+            return res.status(400).json({ success: false, message: 'User ID required' });
+        }
+
+        const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+        console.log('User found:', user ? 'Yes' : 'No');
+        
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        if (user.recoveryCodes?.length)   // already generated
+        return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
+
+        const plainCodes = [];
+        const hashedCodes = [];
+
+        for (let i = 0; i < 10; i++) {
+        const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8-char
+        plainCodes.push(code);
+        hashedCodes.push(await bcrypt.hash(code, 10));
+        }
+
+        await db.collection('users').updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { recoveryCodes: hashedCodes, recoveryCodesGeneratedAt: new Date() } }
+        );
+
+        res.json({ success: true, codes: plainCodes });   // ONLY time user sees them
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Serve frontend for all other routes
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend/dist/index.html'));
 });

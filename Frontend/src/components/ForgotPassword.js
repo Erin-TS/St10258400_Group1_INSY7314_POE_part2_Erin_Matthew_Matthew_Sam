@@ -1,55 +1,51 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import './FormStyles.css';
+import './FormStyles.css'; 
 
 const ForgotPassword = () => {
-  const [step, setStep] = useState(1); // 1: email, 2: reset code, 3: new password
-  const [formData, setFormData] = useState({
-    email: '',
-    resetCode: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+const [step, setStep] = useState(1); // 1: recovery code, 2: new password
+const [formData, setFormData] = useState({
+  username: '',
+  recoveryCode: '',
+  newPassword: '',
+  confirmPassword: ''
+});
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
+const [loading, setLoading] = useState(false);
+const [resetToken, setResetToken] = useState(null); 
+const navigate = useNavigate();
+
+const handleChange = e =>
+  setFormData({ ...formData, [e.target.name]: e.target.value });
+
+const handleCodeSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    const res = await fetch('/api/verify-recovery-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: formData.username,
+        recoveryCode: formData.recoveryCode.trim().toUpperCase()
+      })
     });
-  };
 
-  const handleEmailSubmit = (e) => {
-    e.preventDefault();
-    setLoading(true);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
     
-    // implement email verification logic here
-    console.log('Forgot Password - Email:', formData.email);
-    
-    setTimeout(() => {
-      alert('Reset code sent to your email!');
-      setStep(2);
-      setLoading(false);
-    }, 1500);
-  };
+    alert('Code verified! Please enter your new password.');
+    setResetToken(data.resetToken); // Store the reset token
+    setStep(2);
+  } catch (error) {
+    alert(error.message || 'Failed to verify code');
+  } finally {
+    setLoading(false);
+  }
+  
+};
 
-  const handleCodeSubmit = (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    // verification logic here 
-    console.log('Forgot Password - Reset Code:', formData.resetCode);
-    
-    setTimeout(() => {
-      alert('Code verified! Please enter your new password.');
-      setStep(3);
-      setLoading(false);
-    }, 1500);
-  };
-
-  const handlePasswordSubmit = (e) => {
+const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
     if (formData.newPassword !== formData.confirmPassword) {
@@ -58,58 +54,60 @@ const ForgotPassword = () => {
     }
     
     setLoading(true);
-    
-    // implement password reset logic here
-    console.log('Forgot Password - New Password:', formData.newPassword);
-    
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resetToken: resetToken,
+          newPassword: formData.newPassword,
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+
       alert('Password reset successful! Please login with your new password.');
       sessionStorage.clear();
       
       navigate('/customer-login');
+    } catch (error) {
+      alert(error.message || 'Error resetting password');
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
     <div className="form-container">
       <div className="form-card">
         <h2 className="form-title">Forgot Password</h2>
-        
+
         {step === 1 && (
-          <form onSubmit={handleEmailSubmit}>
-            <p className="form-subtitle">Enter your email address to receive a reset code</p>
+          <form onSubmit={handleCodeSubmit}>
+            <p className="form-subtitle">Enter one of your recovery codes</p>
             <div className="form-group">
-              <label>Email Address</label>
+              <label>Username</label>
               <input
-                type="email"
-                name="email"
-                placeholder="Enter your email"
-                value={formData.email}
+                type="text"
+                name="username"
+                placeholder="Your username"
+                value={formData.username || ''}
                 onChange={handleChange}
                 className="form-input"
                 required
               />
             </div>
-            <button type="submit" disabled={loading} className="form-button">
-              {loading ? 'Sending...' : 'Send Reset Code'}
-            </button>
-          </form>
-        )}
-
-        {step === 2 && (
-          <form onSubmit={handleCodeSubmit}>
-            <p className="form-subtitle">Enter the reset code sent to {formData.email}</p>
             <div className="form-group">
-              <label>Reset Code</label>
+              <label>Recovery Code</label>
               <input
                 type="text"
-                name="resetCode"
-                placeholder="Enter reset code"
-                value={formData.resetCode}
+                name="recoveryCode"
+                placeholder="Enter recovery code"
+                value={formData.recoveryCode}
                 onChange={handleChange}
                 className="form-input"
-                maxLength="6"
+                maxLength="8"
                 required
               />
             </div>
@@ -119,7 +117,7 @@ const ForgotPassword = () => {
           </form>
         )}
 
-        {step === 3 && (
+        {step === 2 && (
           <form onSubmit={handlePasswordSubmit}>
             <p className="form-subtitle">Enter your new password</p>
             <div className="form-group">

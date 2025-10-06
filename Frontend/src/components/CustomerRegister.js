@@ -17,6 +17,11 @@ const CustomerRegister = () => {
     const [loading, setLoading] = useState(false);
     const [showQRCode, setShowQRCode] = useState(false);
     const [qrCodeData, setQrCodeData] = useState(null);
+    const [showRecoveryCodes, setShowRecoveryCodes] = useState(false); 
+    const [recoveryCodes, setRecoveryCodes] = useState([]);
+    const [codesSaved, setCodesSaved] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+    const [downloadSuccess, setDownloadSuccess] = useState(false);
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -71,12 +76,141 @@ const CustomerRegister = () => {
             setLoading(false);
         }
     };
+
+    const handleContinueToRecoveryCodes = async () => {
+        setLoading(true);
+        try {
+
+            const response = await fetch('/api/generate-recovery-codes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ userId: qrCodeData.userId })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                setRecoveryCodes(data.codes);
+                setShowQRCode(false);
+                setShowRecoveryCodes(true);
+            } else {
+                alert(data.message || 'Failed to generate recovery codes');
+            }
+            
+        } catch (error) {
+            console.error('Recovery codes error:', error);
+            alert('Failed to generate recovery codes');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleCopyToClipboard = async () => {
+        try {
+            const codesText = recoveryCodes.join('\n');
+            await navigator.clipboard.writeText(codesText);
+            setCopySuccess(true);
+            setCodesSaved(true);
+            
+            setTimeout(() => setCopySuccess(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy codes. Please try downloading instead.');
+        }
+    };
+
+    const handleDownloadCodes = () => {
+        const codesText = recoveryCodes.join('\n');
+        const blob = new Blob([
+            'RECOVERY CODES - KEEP SAFE\n',
+            '================================\n\n',
+            codesText,
+            '\n\n================================\n',
+            'Each code can only be used once.\n',
+            'Store in a secure location.\n',
+            `Generated: ${new Date().toLocaleString()}`
+        ], { type: 'text/plain' });
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `recovery-codes-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        setDownloadSuccess(true);
+        setCodesSaved(true);
+        
+        setTimeout(() => setDownloadSuccess(false), 2000);
+    };
     
     const handleContinueToLogin = () => {
+        if (!codesSaved) {
+            alert('Please save your recovery codes before continuing!');
+            return;
+        }
+
         alert('Registration successful! Please login.');
                 sessionStorage.clear();
                 window.location.href = '/customer-login'; 
     };
+
+    // Show Recovery Codes Section
+    if (showRecoveryCodes && recoveryCodes.length > 0) {
+        return (
+            <div className="form-container">
+                <div className="form-card register-card">
+                    <h2>Your Recovery Codes</h2>
+                    <div className="warning-banner">
+                        <strong>Important: Save These Codes!</strong>
+                        <p>These codes can be used to recover your account if you lose access to your authenticator app. 
+                            Each code can only be used once. Store them in a safe place.</p>
+                    </div>
+
+                    <div className="">
+                        {recoveryCodes.map((code, index) => (
+                            <div key={index} className="code-item">
+                                {code}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="">
+                        <button 
+                            onClick={handleCopyToClipboard}
+                            className={`form-button ${copySuccess ? 'success' : ''}`}
+                        >
+                            {copySuccess ? 'Copied!' : 'Copy to Clipboard'}
+                        </button>
+                        <button 
+                            onClick={handleDownloadCodes}
+                            className={`form-button ${downloadSuccess ? 'success' : ''}`}
+                        >
+                            {downloadSuccess ? 'Downloaded!' : 'Download Codes'}
+                        </button>
+                    </div>
+
+                    <button 
+                        onClick={handleContinueToLogin}
+                        className="form-button primary"
+                        disabled={!codesSaved}
+                    >
+                        Continue to Login
+                    </button>
+
+                    <p className="save-instructions">
+                        {codesSaved 
+                            ? 'Recovery codes saved! You can now continue.' 
+                            : 'Please download or copy your recovery codes to continue'}
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (showQRCode && qrCodeData) {
         return (
@@ -97,8 +231,8 @@ const CustomerRegister = () => {
                             If you cannot scan the QR code, you can manually enter the above code into your authenticator app.
                         </p>
                     </div>
-                    <button onClick={handleContinueToLogin} className="form-button">
-                        Continue to Login
+                    <button onClick={handleContinueToRecoveryCodes} className="form-button">
+                        Continue to Recovery Codes
                     </button>
                 </div>    
             </div>
