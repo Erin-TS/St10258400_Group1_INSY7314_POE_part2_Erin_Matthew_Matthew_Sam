@@ -13,6 +13,7 @@ import db from './db/conn.mjs';
 
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
+import mongoSanitize from 'express-mongo-sanitize'; // Import MongoDB sanitization
 
 // Load environment variables
 dotenv.config();
@@ -57,6 +58,14 @@ app.use(helmet({
 // Middleware with request size limits to prevent payload attacks
 app.use(express.json({ limit: '10kb' })); // Prevent JSON payload attacks
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Prevent URL-encoded payload attacks
+
+// MongoDB NoSQL Injection Protection - sanitizes user input
+app.use(mongoSanitize({
+    replaceWith: '_', // Replace prohibited characters with underscore
+    onSanitize: ({ req, key }) => {
+        console.warn(`Potential NoSQL injection attempt detected - Sanitized key: ${key}`);
+    }
+}));
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
