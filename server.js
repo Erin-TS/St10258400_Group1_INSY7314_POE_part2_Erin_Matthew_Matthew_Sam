@@ -18,9 +18,6 @@ import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
 import { ok } from 'assert';
-
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
@@ -52,6 +49,8 @@ app.use((_, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
+});
+
 // Joi Validation Schemas
 const loginSchema = Joi.object({
     username: Joi.string().alphanum().min(3).max(30).required(),
@@ -200,12 +199,7 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-// Login route with auth rate limiting
-app.post('/api/login', authLimiter, validate([
-    body('username').trim().matches(/^[A-Za-z0-9_]{3,20}$/),
-    body('password').notEmpty().isLength({ min: 8, max: 128 }), 
-    body('accountNumber').optional({ checkFalsy: true }).matches(/^\d{10}$/)
-]), async (req, res) => {
+
 // Login route with auth rate limiting and validation
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
@@ -397,7 +391,7 @@ app.post('/api/payments', verifyToken, validate([
             reference: `PAY${Date.now()}`
         };
   const result = await db.collection('payments').insertOne(payment);
-        res.json({ success: true, paymentId: result.insertedId });
+        res.json({ success: true, paymentId: result.insertedId, reference: payment.reference });
     } catch (error) {
         res.status(500).json({ error: 'Payment submission failed' });
     }
@@ -407,7 +401,7 @@ app.post('/api/payments', verifyToken, validate([
 app.get('/api/payments', verifyToken, async (req, res) => {
     try {
         const payments = await db.collection('payments').find({}).toArray();
-        res.json({ payments });
+        res.json(payments);  // ← Changed from res.json({ payments })
     } catch (error) {
         res.status(500).json({ error: 'Failed to retrieve payments' });
     }
