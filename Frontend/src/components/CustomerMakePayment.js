@@ -50,7 +50,7 @@ const CustomerMakePayment = () => {
 
         const data = await response.json();
         if (response.ok && data.success) {
-            alert('Payment successful! Reference: ' + data.refrence);
+            alert('Payment successful! Reference: ' + data.reference);
 
             // Clear form
             setFormData({
