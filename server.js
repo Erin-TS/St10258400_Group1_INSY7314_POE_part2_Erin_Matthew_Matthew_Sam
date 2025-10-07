@@ -378,6 +378,34 @@ app.post('/api/register', authLimiter, validate([
     }
 });
 
+//payment endpoint to store payment details in the database
+app.post('/api/payments', verifyToken, validate([
+    body('amount').isFloat({ min: 0.01 }),
+    body('currency').isIn(['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'ZAR', 'RUB']),
+    body('payeeFullName').trim().escape().notEmpty(),
+    body('payeeAccountNumber').trim().notEmpty(),
+    body('bankName').trim().escape().notEmpty(),
+    body('swiftCode').trim().matches(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/)
+]), async (req, res) => {
+    try {
+         const payment = {
+            userId: req.user.id,
+            username: req.user.username,
+            ...req.body,
+            status: 'pending',
+            createdAt: new Date(),
+            reference: `PAY${Date.now()}`
+        };
+  const result = await db.collection('payments').insertOne(payment);
+        res.json({ success: true, paymentId: result.insertedId });
+    } catch (error) {
+        res.status(500).json({ error: 'Payment submission failed' });
+    }
+});
+
+
+
+
 // Generate a TOTP for hardcoded employee user with auth rate limiting
 app.post('/api/register-employee', authLimiter, async (req, res) => {
     try {
