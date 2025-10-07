@@ -21,6 +21,7 @@ import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import { body, validationResult } from 'express-validator';
+import { sanitize } from 'dompurify';
 
 // Load environment variables
 dotenv.config();
@@ -46,6 +47,15 @@ app.use((_, res, next) => {
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
+
+export default function Comment({ htmlText }) {
+  return (
+    <div
+      className="comment-body"
+      dangerouslySetInnerHTML={{ __html: safeHTML(htmlText) }}
+    />
+  );
+}
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
