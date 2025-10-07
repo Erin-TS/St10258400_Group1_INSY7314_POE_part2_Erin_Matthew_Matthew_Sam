@@ -273,7 +273,10 @@ const CustomerRegister = () => {
                     type="text"
                     name="idNumber"
                     value={formData.idNumber}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 13);
+                        setFormData({ ...formData, idNumber: digits });
+                    }}
                     className='form-input'
                     required
                     maxLength="13"
@@ -289,7 +292,10 @@ const CustomerRegister = () => {
                     type="text"
                     name="accountNumber"
                     value={formData.accountNumber}
-                    onChange={handleChange}
+                    onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setFormData({ ...formData, accountNumber: digits });
+                    }}
                     className='form-input'
                     required
                     maxLength="10"
@@ -304,6 +310,8 @@ const CustomerRegister = () => {
                     value={formData.username}
                     onChange={handleChange}
                     className='form-input'
+                    pattern="[-A-Za-z0-9_.]{3,20}"
+                    title="Username: 3-20 characters, letters, numbers, underscore, hyphen or dot only"
                     required
                 />
                 </div>

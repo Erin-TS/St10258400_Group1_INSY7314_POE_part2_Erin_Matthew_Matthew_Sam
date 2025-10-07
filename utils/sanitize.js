@@ -1,9 +1,10 @@
-import DOMPurify from 'dompurify';
+/*  Node + Browser compatible sanitizer
+    Uses `sanitize-html` on server and
+     */
+import sanitizeHtml from 'sanitize-html';
 
 export const safeHTML = (dirty = '') =>
-  DOMPurify.sanitize(dirty, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'],
-    ALLOWED_ATTR: []
+  sanitizeHtml(dirty, {
+    allowedTags: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'],
+    allowedAttributes: {}
   });
-
-// centralised XSS protection using DOMPurify. Any user input that is rendered as HTML should be sanitized using this function.  
