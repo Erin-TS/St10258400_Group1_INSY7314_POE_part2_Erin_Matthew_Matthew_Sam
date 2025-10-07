@@ -413,6 +413,22 @@ app.get('/api/payments', verifyToken, async (req, res) => {
     }
 });
 
+//approving payments endpoint for employees
+app.post('/api/payments/:id/approve', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'employee') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        await db.collection('payments').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { status: 'approved', approvedAt: new Date(), approvedBy: req.user.username } }
+        );
+        res.json({ success: true, message: 'Payment approved' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to approve payment' });
+    }   
+});
 
 // Generate a TOTP for hardcoded employee user with auth rate limiting
 app.post('/api/register-employee', authLimiter, async (req, res) => {
