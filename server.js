@@ -24,8 +24,8 @@ import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
-import crypto from 'crypto';
-
+import { body, validationResult } from 'express-validator';
+import { safeHTML } from './utils/sanitize.js';
 
 // Load environment variables
 dotenv.config();
@@ -40,6 +40,18 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
+app.disable('x-powered-by');
+app.use((_, res, next) => {                 
+  res.set('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+// info-leaking hardening headers
+// prevents url paths leaking to external sites
+app.use((_, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
 // Joi Validation Schemas
 const loginSchema = Joi.object({
     username: Joi.string().alphanum().min(3).max(30).required(),
@@ -156,6 +168,15 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+const validate = rules => [                                  
+  ...rules,
+  (req, res, next) => {
+    const err = validationResult(req);
+    if (!err.isEmpty()) return res.status(422).json({ error: 'Invalid input', details: err.array() });
+    next();
+  }
+];
+
 // API routes
 
 app.get('/api/test', (req, res) => {
@@ -179,6 +200,12 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
+// Login route with auth rate limiting
+app.post('/api/login', authLimiter, validate([
+    body('username').trim().matches(/^[A-Za-z0-9_]{3,20}$/),
+    body('password').notEmpty().isLength({ min: 8, max: 128 }), 
+    body('accountNumber').optional({ checkFalsy: true }).matches(/^\d{10}$/)
+]), async (req, res) => {
 // Login route with auth rate limiting and validation
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
@@ -290,7 +317,15 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Registration route with auth rate limiting and validation
-app.post('/api/register', authLimiter, async (req, res) => {
+// prevents script injection and prevents execution of HTML tags
+app.post('/api/register', authLimiter, validate([
+    body('firstName').trim().escape().isLength({ min: 1, max: 50 }),
+    body('lastName').trim().escape().isLength({ min: 1, max: 50 }),
+    body('idNumber').trim().matches(/^\d{13}$/),
+    body('username').trim().escape().matches(/^[A-Za-z0-9_]{3,20}$/),
+    body('password').isStrongPassword(),
+    body('accountNumber').trim().matches(/^\d{10}$/) 
+  ]), async (req, res) => {
     try {
         // Validate input
         const { error, value } = registerSchema.validate(req.body);
@@ -500,7 +535,10 @@ app.post('/api/hash-password', async (req, res) => {
 });
 
 // Verify recovery code route
-app.post('/api/verify-recovery-code', async (req, res) => {
+app.post('/api/verify-recovery-code', validate([
+    body('username').trim().escape().notEmpty().isLength({ min: 3, max: 20 }),
+    body('recoveryCode').trim().escape().notEmpty().matches(/^[A-F0-9]{8}$/)
+]), async (req, res) => {
     try {
         const { username, recoveryCode } = req.body;
         console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
@@ -546,7 +584,11 @@ app.post('/api/verify-recovery-code', async (req, res) => {
 });
 
 // Reset password route
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/reset-password', validate([
+    body('resetToken').isJWT(),
+  body('newPassword').isStrongPassword()
+]),
+    async (req, res) => {
     try {
         const { resetToken, newPassword } = req.body;
         if (!resetToken || !newPassword)
