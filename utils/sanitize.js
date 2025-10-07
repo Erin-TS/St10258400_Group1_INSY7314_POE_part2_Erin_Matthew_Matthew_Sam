@@ -1,5 +1,5 @@
-/*  Node + Browser compatible sanitizer
-    Uses `sanitize-html` on server and
+/*  Server-side HTML sanitizer
+    Uses the `sanitize-html` library to sanitize user input.
      */
 import sanitizeHtml from 'sanitize-html';
 
