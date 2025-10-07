@@ -403,7 +403,15 @@ app.post('/api/payments', verifyToken, validate([
     }
 });
 
-
+//get payments endpoint to retrieve payment history
+app.get('/api/payments', verifyToken, async (req, res) => {
+    try {
+        const payments = await db.collection('payments').find({}).toArray();
+        res.json({ payments });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to retrieve payments' });
+    }
+});
 
 
 // Generate a TOTP for hardcoded employee user with auth rate limiting
