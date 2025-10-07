@@ -21,7 +21,6 @@ import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import { body, validationResult } from 'express-validator';
-import { sanitize } from 'dompurify';
 
 // Load environment variables
 dotenv.config();
@@ -42,20 +41,13 @@ app.use((_, res, next) => {
   next();
 });
 
+// info-leaking hardening headers
+// prevents url paths leaking to external sites
 app.use((_, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
-
-export default function Comment({ htmlText }) {
-  return (
-    <div
-      className="comment-body"
-      dangerouslySetInnerHTML={{ __html: safeHTML(htmlText) }}
-    />
-  );
-}
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
@@ -281,7 +273,8 @@ app.post('/api/logout', (req, res) => {
     res.json({ message: 'Logged out successfully.' });
 });
 
-// Registration route with auth rate limiting
+// Registration route with auth rate limiting and validation
+// prevents script injection and prevents execution of HTML tags
 app.post('/api/register', authLimiter, validate([
     body('firstName').trim().escape().isLength({ min: 1, max: 50 }),
     body('lastName').trim().escape().isLength({ min: 1, max: 50 }),
