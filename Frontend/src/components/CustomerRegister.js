@@ -310,8 +310,8 @@ const CustomerRegister = () => {
                     value={formData.username}
                     onChange={handleChange}
                     className='form-input'
-                    pattern="[-A-Za-z0-9_.]{3,20}"
-                    title="Username: 3-20 characters, letters, numbers, underscore, hyphen or dot only"
+                    pattern="^[A-Za-z0-9_]{3,20}$"
+                    title="Username: 3-20 characters, letters, numbers, and underscores only"
                     required
                 />
                 </div>
