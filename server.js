@@ -20,8 +20,7 @@ import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
-import crypto from 'crypto';
-
+import { body, validationResult } from 'express-validator';
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +34,18 @@ const HTTP_PORT = process.env.HTTP_PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
+
+app.disable('x-powered-by');
+app.use((_, res, next) => {                 
+  res.set('X-XSS-Protection', '1; mode=block');
+  next();
+});
+
+app.use((_, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
@@ -120,6 +131,15 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+const validate = rules => [                                  
+  ...rules,
+  (req, res, next) => {
+    const err = validationResult(req);
+    if (!err.isEmpty()) return res.status(422).json({ error: 'Invalid input', details: err.array() });
+    next();
+  }
+];
+
 // API routes
 
 app.get('/api/test', (req, res) => {
@@ -144,7 +164,11 @@ app.get('/api/db-test', async (req, res) => {
 });
 
 // Login route with auth rate limiting
-app.post('/api/login', authLimiter, async (req, res) => {
+app.post('/api/login', authLimiter, validate([
+    body('username').trim().matches(/^[A-Za-z0-9_]{3,20}$/),
+    body('password').notEmpty().isLength({ min: 8, max: 128 }), 
+    body('accountNumber').optional({ checkFalsy: true }).matches(/^\d{10}$/)
+]), async (req, res) => {
     try {
         const { username, password, accountNumber } = req.body;
 
@@ -248,7 +272,14 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Registration route with auth rate limiting
-app.post('/api/register', authLimiter, async (req, res) => {
+app.post('/api/register', authLimiter, validate([
+    body('firstName').trim().escape().isLength({ min: 1, max: 50 }),
+    body('lastName').trim().escape().isLength({ min: 1, max: 50 }),
+    body('idNumber').trim().matches(/^\d{13}$/),
+    body('username').trim().escape().isAlphanumeric().isLength({ min: 3, max: 20 }),
+    body('password').isStrongPassword(),
+    body('accountNumber').trim().matches(/^\d{10}$/) 
+  ]), async (req, res) => {
     try {
         const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
         const existingUser = await db.collection('users').findOne({ username });
@@ -443,7 +474,10 @@ app.post('/api/hash-password', async (req, res) => {
 });
 
 // Verify recovery code route
-app.post('/api/verify-recovery-code', async (req, res) => {
+app.post('/api/verify-recovery-code', validate([
+    body('username').trim().escape().notEmpty().isLength({ min: 3, max: 20 }),
+    body('recoveryCode').trim().escape().notEmpty().matches(/^[A-F0-9]{8}$/)
+]), async (req, res) => {
     try {
         const { username, recoveryCode } = req.body;
         console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
@@ -489,7 +523,11 @@ app.post('/api/verify-recovery-code', async (req, res) => {
 });
 
 // Reset password route
-app.post('/api/reset-password', async (req, res) => {
+app.post('/api/reset-password', validate([
+    body('resetToken').isJWT(),
+  body('newPassword').isStrongPassword()
+]),
+    async (req, res) => {
     try {
         const { resetToken, newPassword } = req.body;
         if (!resetToken || !newPassword)
