@@ -280,7 +280,7 @@ app.post('/api/register', authLimiter, validate([
     body('firstName').trim().escape().isLength({ min: 1, max: 50 }),
     body('lastName').trim().escape().isLength({ min: 1, max: 50 }),
     body('idNumber').trim().matches(/^\d{13}$/),
-    body('username').trim().escape().matches(/^[A-Za-z0-9_.-]{3,20}$/),
+    body('username').trim().escape().matches(/^[A-Za-z0-9_]{3,20}$/),
     body('password').isStrongPassword(),
     body('accountNumber').trim().matches(/^\d{10}$/) 
   ]), async (req, res) => {
