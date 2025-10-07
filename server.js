@@ -11,6 +11,10 @@ import speakeasy from 'speakeasy';
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 
+import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
+import helmet from 'helmet'; // Import Helmet for security headers
+import mongoSanitize from 'express-mongo-sanitize'; // Import MongoDB sanitization
+import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
 import { ok } from 'assert';
@@ -48,6 +52,28 @@ app.use((_, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
+// Joi Validation Schemas
+const loginSchema = Joi.object({
+    username: Joi.string().alphanum().min(3).max(30).required(),
+    password: Joi.string().min(6).max(128).required(),
+    accountNumber: Joi.string().alphanum().min(5).max(20).optional()
+});
+
+const registerSchema = Joi.object({
+    firstName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
+    lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
+    idNumber: Joi.string().min(5).max(20).required(),
+    accountNumber: Joi.string().alphanum().min(5).max(20).required(),
+    username: Joi.string().alphanum().min(3).max(30).required(),
+    password: Joi.string().min(6).max(128).required()
+});
+
+const totpVerifySchema = Joi.object({
+    token: Joi.string().length(6).pattern(/^[0-9]+$/).required()
+});
+
+const hashPasswordSchema = Joi.object({
+    password: Joi.string().min(6).max(128).required()
 });
 
 // Apply general rate limiting to all requests
@@ -97,6 +123,14 @@ app.use(session({
         httpOnly: true,
         sameSite: 'strict',
         maxAge: 3600000
+    }
+}));
+
+// MongoDB NoSQL Injection Protection - sanitizes user input
+app.use(mongoSanitize({
+    replaceWith: '_', // Replace prohibited characters with underscore
+    onSanitize: () => {
+        console.warn('Potential NoSQL injection attempt detected and sanitized.');
     }
 }));
 
@@ -172,8 +206,16 @@ app.post('/api/login', authLimiter, validate([
     body('password').notEmpty().isLength({ min: 8, max: 128 }), 
     body('accountNumber').optional({ checkFalsy: true }).matches(/^\d{10}$/)
 ]), async (req, res) => {
+// Login route with auth rate limiting and validation
+app.post('/api/login', authLimiter, async (req, res) => {
     try {
-        const { username, password, accountNumber } = req.body;
+        // Validate input
+        const { error, value } = loginSchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { username, password, accountNumber } = value;
 
         let isValid = false;
         let userData = null;
@@ -285,7 +327,14 @@ app.post('/api/register', authLimiter, validate([
     body('accountNumber').trim().matches(/^\d{10}$/) 
   ]), async (req, res) => {
     try {
-        const { firstName, lastName, idNumber, accountNumber, username, password } = req.body;
+        // Validate input
+        const { error, value } = registerSchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { firstName, lastName, idNumber, accountNumber, username, password } = value;
+        
         const existingUser = await db.collection('users').findOne({ username });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
@@ -370,10 +419,16 @@ app.post('/api/register-employee', authLimiter, async (req, res) => {
     }
 });
 
-// Verify TOTP 
+// Verify TOTP with validation
 app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
     try {
-        const { token: totpToken } = req.body;
+        // Validate input
+        const { error, value } = totpVerifySchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
+        }
+
+        const { token: totpToken } = value;
         const userId = req.user.id;
 
         const user = await db.collection('users').findOne({ 
@@ -456,14 +511,16 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
     }
 });
 
-// Hash password route
+// Hash password route with validation
 app.post('/api/hash-password', async (req, res) => {
     try {
-        const { password } = req.body;
-        
-        if (!password) {
-            return res.status(400).json({ error: 'Password is required' });
+        // Validate input
+        const { error, value } = hashPasswordSchema.validate(req.body);
+        if (error) {
+            return res.status(400).json({ error: error.details[0].message });
         }
+
+        const { password } = value;
         
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
