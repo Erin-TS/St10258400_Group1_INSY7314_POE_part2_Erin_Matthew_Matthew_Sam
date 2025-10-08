@@ -18,9 +18,6 @@ import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
 import { ok } from 'assert';
-
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
 import { getCertificatePaths } from './utils/generateCerts.js';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
@@ -52,6 +49,8 @@ app.use((_, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
+});
+
 // Joi Validation Schemas
 const loginSchema = Joi.object({
     username: Joi.string().alphanum().min(3).max(30).required(),
@@ -200,12 +199,7 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-// Login route with auth rate limiting
-app.post('/api/login', authLimiter, validate([
-    body('username').trim().matches(/^[A-Za-z0-9_]{3,20}$/),
-    body('password').notEmpty().isLength({ min: 8, max: 128 }), 
-    body('accountNumber').optional({ checkFalsy: true }).matches(/^\d{10}$/)
-]), async (req, res) => {
+
 // Login route with auth rate limiting and validation
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
@@ -377,6 +371,75 @@ app.post('/api/register', authLimiter, validate([
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+//payment endpoint to store payment details in the database
+app.post('/api/payments', verifyToken, validate([
+    body('amount').isFloat({ min: 0.01 }),
+    body('currency').isIn(['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'ZAR', 'RUB']),
+    body('payeeFullName').trim().escape().notEmpty(),
+    body('payeeAccountNumber').trim().notEmpty(),
+    body('bankName').trim().escape().notEmpty(),
+    body('swiftCode').trim().matches(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/)
+]), async (req, res) => {
+    try {
+         const payment = {
+            userId: req.user.id,
+            username: req.user.username,
+            ...req.body,
+            status: 'pending',
+            createdAt: new Date(),
+            reference: `PAY${Date.now()}`
+        };
+  const result = await db.collection('payments').insertOne(payment);
+        res.json({ success: true, paymentId: result.insertedId, reference: payment.reference });
+    } catch (error) {
+        res.status(500).json({ error: 'Payment submission failed' });
+    }
+});
+
+//get payments endpoint to retrieve payment history
+app.get('/api/payments', verifyToken, async (req, res) => {
+    try {
+        const payments = await db.collection('payments').find({}).toArray();
+        res.json(payments);  // ← Changed from res.json({ payments })
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to retrieve payments' });
+    }
+});
+
+//approving payments endpoint for employees
+app.post('/api/payments/:id/approve', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'employee') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        await db.collection('payments').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { status: 'approved', approvedAt: new Date(), approvedBy: req.user.username } }
+        );
+        res.json({ success: true, message: 'Payment approved' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to approve payment' });
+    }   
+});
+
+//rejecting payments endpoint for employees
+app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'employee') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        await db.collection('payments').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { status: 'rejected', rejectedAt: new Date(), rejectedBy: req.user.username } }
+        );
+        res.json({ success: true, message: 'Payment rejected' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to reject payment' });
+    }
+});
+
 
 // Generate a TOTP for hardcoded employee user with auth rate limiting
 app.post('/api/register-employee', authLimiter, async (req, res) => {

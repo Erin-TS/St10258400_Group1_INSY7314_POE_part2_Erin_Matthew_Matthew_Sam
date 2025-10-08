@@ -35,16 +35,24 @@ const CustomerMakePayment = () => {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        //payment logic to be implemented here
-        console.log('Customer Make Payment data:', formData);
+       try {
+        const response = await fetch('/api/payments', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify(formData)
+        });
 
-        setTimeout(() => {
-            alert('Payment successful! it will be processsed shortly.');
+        const data = await response.json();
+        if (response.ok && data.success) {
+            alert('Payment successful! Reference: ' + data.reference);
 
-            //reset form
+            // Clear form
             setFormData({
                 amount: '',
                 currency: '',
@@ -55,8 +63,15 @@ const CustomerMakePayment = () => {
                 payementReference: '',
                 swiftCode: ''
             });
+        } else {
+            alert(data.error || 'Payment failed. Please try again.');
+        }
+         } catch (error) {
+            console.error('Payment error:', error);
+            alert('An error occurred during payment. Please try again.');
+        } finally {
             setLoading(false);
-        }, 2000); // Simulate a 2-second loading time
+        }
     };
 
     const handleLogout = async () => {
