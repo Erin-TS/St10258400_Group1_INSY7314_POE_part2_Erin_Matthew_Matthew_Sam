@@ -13,7 +13,7 @@ import db from './db/conn.mjs';
 
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
-import mongoSanitize from 'express-mongo-sanitize'; // Import MongoDB sanitization
+// import mongoSanitize from 'express-mongo-sanitize'; // Incompatible with Node.js v22
 import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
@@ -125,13 +125,28 @@ app.use(session({
     }
 }));
 
-// MongoDB NoSQL Injection Protection - sanitizes user input
-app.use(mongoSanitize({
-    replaceWith: '_', // Replace prohibited characters with underscore
-    onSanitize: () => {
-        console.warn('Potential NoSQL injection attempt detected and sanitized.');
+// Custom MongoDB NoSQL Injection Protection middleware- to sanitize inputs
+const sanitizeNoSQL = (obj) => {
+    if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach(key => {
+            if (key.startsWith('$') || key.includes('.')) {
+                console.warn(`Potential NoSQL injection attempt detected. Key: ${key}`);
+                delete obj[key];
+            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                sanitizeNoSQL(obj[key]);
+            }
+        });
     }
-}));
+    return obj;
+};
+
+app.use((req, res, next) => {
+    // Sanitize in-place to avoid reassignment issues with read-only properties
+    if (req.body) sanitizeNoSQL(req.body);
+    if (req.query) sanitizeNoSQL(req.query);
+    if (req.params) sanitizeNoSQL(req.params);
+    next();
+});
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
