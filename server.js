@@ -53,7 +53,7 @@ app.use((_, res, next) => {
 
 // Joi Validation Schemas
 const loginSchema = Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
     password: Joi.string().min(6).max(128).required(),
     accountNumber: Joi.string().alphanum().min(5).max(20).optional()
 });
@@ -63,7 +63,7 @@ const registerSchema = Joi.object({
     lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
     idNumber: Joi.string().min(5).max(20).required(),
     accountNumber: Joi.string().alphanum().min(5).max(20).required(),
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
     password: Joi.string().min(6).max(128).required()
 });
 
@@ -87,7 +87,7 @@ app.use(apiLimiter);
 // Apply specific rate limiting to authentication routes
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per window
+    max: 6, // limit each IP to 6 requests per window
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many attempts, please try again later.' }
@@ -614,7 +614,7 @@ app.post('/api/hash-password', async (req, res) => {
 
 // Verify recovery code route
 app.post('/api/verify-recovery-code', validate([
-    body('username').trim().escape().notEmpty().isLength({ min: 3, max: 20 }),
+    body('username').trim().escape().matches(/^[A-Za-z0-9_]{3,20}$/),
     body('recoveryCode').trim().escape().notEmpty().matches(/^[A-F0-9]{8}$/)
 ]), async (req, res) => {
     try {
