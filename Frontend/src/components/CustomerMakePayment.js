@@ -42,7 +42,7 @@ const CustomerMakePayment = () => {
             }
         }
         
-        // Validate and set custom validity message
+        // Validate and set custom  message
         if (name === 'bankName') {
             if (!/^[a-zA-Z\s&'-]*$/.test(value)) {
                 e.target.setCustomValidity('Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes (\')');
