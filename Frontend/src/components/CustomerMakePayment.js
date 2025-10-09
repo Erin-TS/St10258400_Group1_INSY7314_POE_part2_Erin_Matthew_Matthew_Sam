@@ -158,6 +158,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange} 
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z\s'-]{2,100}$"
+                            title="Name should contain only letters, spaces, hyphens, and apostrophes (2-100 characters)"
+                            maxLength="100"
                         />
                     </div>
                     <div className='form-group'>
@@ -169,6 +172,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'  
                             required
+                            pattern="^[0-9]{8,20}$"
+                            title="Account number should be 8-20 digits"
+                            maxLength="20"
                         />
                     </div>       
                     <div className='form-group'>
@@ -180,6 +186,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z\s&'-]{2,100}$"
+                            title="Bank name should contain only letters, spaces, ampersands, hyphens, and apostrophes"
+                            maxLength="100"
                         />
                     </div>
                     <div className='form-group'>
@@ -191,6 +200,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z0-9\s-]{3,50}$"
+                            title="Reference should be 3-50 characters (letters, numbers, spaces, hyphens)"
+                            maxLength="50"
                         />
                     </div>
                     <div className='form-group'>
