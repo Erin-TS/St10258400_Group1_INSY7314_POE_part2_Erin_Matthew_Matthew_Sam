@@ -137,6 +137,11 @@ const EmployeeViewPayments = () => {
         }   
     };
 
+    const handleSendToSwift = (paymentId, reference) => {
+        alert(`Sending payment ${reference} to SWIFT...`);
+        // You can add actual SWIFT integration logic here in the future
+    };
+
     const filteredPayments = payments.filter(payment => {
         if (filter === 'all') return true;
         return payment.status.toLowerCase() === filter.toLowerCase();
@@ -209,31 +214,41 @@ const EmployeeViewPayments = () => {
                         </thead>
                         <tbody>
                             {filteredPayments.map(payment => (
-                                <tr key={payment.id}>
-                                    <td>{payment.customerName}</td>
-                                    <td>{payment.amount.toFixed(2)}</td>
+                                <tr key={payment._id || payment.id}>
+                                    <td>{payment.customerName || `${payment.username}` || 'N/A'}</td>
+                                    <td>{typeof payment.amount === 'number' ? payment.amount.toFixed(2) : payment.amount}</td>
                                     <td>{payment.currency}</td>
-                                    <td>{payment.payeeName}</td>
+                                    <td>{payment.payeeFullName || payment.payeeName || 'N/A'}</td>
                                     <td>{payment.bankName}</td>
                                     <td style={{ color: getStatusColor(payment.status), fontWeight: 'bold' }}>
                                         {payment.status}
                                     </td>
-                                    <td>{new Date(payment.date).toLocaleDateString()}</td>
+                                    <td>{new Date(payment.createdAt || payment.date).toLocaleDateString()}</td>
                                     <td>{payment.reference}</td>
                                     <td>
                                         {payment.status.toLowerCase() === 'pending' && (
                                             <div className="action-buttons">
                                                 <button 
-                                                    onClick={() => handleApprove(payment.id)}
+                                                    onClick={() => handleApprove(payment._id || payment.id)}
                                                     className="approve-button"
                                                 >
                                                     Approve
                                                 </button>
                                                 <button 
-                                                    onClick={() => handleReject(payment.id)}
+                                                    onClick={() => handleReject(payment._id || payment.id)}
                                                     className="reject-button"
                                                 >
                                                     Reject
+                                                </button>
+                                            </div>
+                                        )}
+                                        {payment.status.toLowerCase() === 'approved' && (
+                                            <div className="action-buttons">
+                                                <button 
+                                                    onClick={() => handleSendToSwift(payment._id || payment.id, payment.reference)}
+                                                    className="swift-button"
+                                                >
+                                                    Send to SWIFT
                                                 </button>
                                             </div>
                                         )}
