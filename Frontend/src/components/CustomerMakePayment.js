@@ -31,6 +31,17 @@ const CustomerMakePayment = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         
+        // Validate amount - only allow positive numbers with up to 2 decimal places
+        if (name === 'amount') {
+            if (value && !/^\d*\.?\d{0,2}$/.test(value)) {
+                e.target.setCustomValidity('Amount should be a valid number with up to 2 decimal places');
+                e.target.reportValidity();
+                return; // Don't update state with invalid value
+            } else {
+                e.target.setCustomValidity('');
+            }
+        }
+        
         // Validate and set custom validity message
         if (name === 'bankName') {
             if (!/^[a-zA-Z\s&'-]*$/.test(value)) {
@@ -140,13 +151,13 @@ const CustomerMakePayment = () => {
                     <div className='form-group'>
                         <label>Amount:</label>
                         <input
-                            type="number"
+                            type="text"
                             name="amount"
                             value={formData.amount}
                             onChange={handleChange}
                             className='form-input'
-                            step="0.01"
-                            min="0.01"
+                            pattern="^\d+(\.\d{1,2})?$"
+                            title="Amount must be a valid number (e.g., 10 or 10.50)"
                             required
                         />
                     </div>  
