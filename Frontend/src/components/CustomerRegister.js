@@ -13,7 +13,6 @@ const CustomerRegister = () => {
         confirmPassword: ''
     });
 
-    const [captchaChecked, setCaptchaChecked] = useState(false);
     const [loading, setLoading] = useState(false);
     const [showQRCode, setShowQRCode] = useState(false);
     const [qrCodeData, setQrCodeData] = useState(null);
@@ -33,10 +32,6 @@ const CustomerRegister = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if(!captchaChecked) {
-            alert('Please complete the CAPTCHA to verify you are not a robot');
-            return;
-        }
 
         if(formData.password !== formData.confirmPassword) {
             alert('Passwords do not match');
@@ -342,18 +337,6 @@ const CustomerRegister = () => {
                     required
                     />
                 </div>
-               <div className="captcha-container">
-            <input
-              type="checkbox"
-              id="captcha"
-              checked={captchaChecked}
-              onChange={(e) => setCaptchaChecked(e.target.checked)}
-            />
-            <label htmlFor="captcha" className="captcha-label">
-              I'm not a robot
-            </label>
-            <div className="captcha-icon">🔒</div>
-          </div>
 
           <button type="submit" disabled={loading} className="form-button">
             {loading ? 'Registering...' : 'Register'}

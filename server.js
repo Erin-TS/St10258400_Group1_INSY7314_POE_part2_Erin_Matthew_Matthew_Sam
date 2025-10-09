@@ -13,7 +13,7 @@ import db from './db/conn.mjs';
 
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
-import mongoSanitize from 'express-mongo-sanitize'; // Import MongoDB sanitization
+// import mongoSanitize from 'express-mongo-sanitize'; // Incompatible with Node.js v22
 import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
@@ -53,7 +53,7 @@ app.use((_, res, next) => {
 
 // Joi Validation Schemas
 const loginSchema = Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
     password: Joi.string().min(6).max(128).required(),
     accountNumber: Joi.string().alphanum().min(5).max(20).optional()
 });
@@ -63,7 +63,7 @@ const registerSchema = Joi.object({
     lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
     idNumber: Joi.string().min(5).max(20).required(),
     accountNumber: Joi.string().alphanum().min(5).max(20).required(),
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
     password: Joi.string().min(6).max(128).required()
 });
 
@@ -87,7 +87,7 @@ app.use(apiLimiter);
 // Apply specific rate limiting to authentication routes
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // limit each IP to 5 requests per window
+    max: 6, // limit each IP to 6 requests per window
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many attempts, please try again later.' }
@@ -125,13 +125,28 @@ app.use(session({
     }
 }));
 
-// MongoDB NoSQL Injection Protection - sanitizes user input
-app.use(mongoSanitize({
-    replaceWith: '_', // Replace prohibited characters with underscore
-    onSanitize: () => {
-        console.warn('Potential NoSQL injection attempt detected and sanitized.');
+// Custom MongoDB NoSQL Injection Protection middleware- to sanitize inputs
+const sanitizeNoSQL = (obj) => {
+    if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach(key => {
+            if (key.startsWith('$') || key.includes('.')) {
+                console.warn(`Potential NoSQL injection attempt detected. Key: ${key}`);
+                delete obj[key];
+            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                sanitizeNoSQL(obj[key]);
+            }
+        });
     }
-}));
+    return obj;
+};
+
+app.use((req, res, next) => {
+    // Sanitize in-place to avoid reassignment issues with read-only properties
+    if (req.body) sanitizeNoSQL(req.body);
+    if (req.query) sanitizeNoSQL(req.query);
+    if (req.params) sanitizeNoSQL(req.params);
+    next();
+});
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
@@ -599,7 +614,7 @@ app.post('/api/hash-password', async (req, res) => {
 
 // Verify recovery code route
 app.post('/api/verify-recovery-code', validate([
-    body('username').trim().escape().notEmpty().isLength({ min: 3, max: 20 }),
+    body('username').trim().escape().matches(/^[A-Za-z0-9_]{3,20}$/),
     body('recoveryCode').trim().escape().notEmpty().matches(/^[A-F0-9]{8}$/)
 ]), async (req, res) => {
     try {

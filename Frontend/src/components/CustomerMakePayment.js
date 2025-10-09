@@ -29,9 +29,59 @@ const CustomerMakePayment = () => {
     }, [navigate]);
 
     const handleChange = (e) => {
+        const { name, value } = e.target;
+        
+        // Validate amount - only allow positive numbers with up to 2 decimal places
+        if (name === 'amount') {
+            if (value && !/^\d*\.?\d{0,2}$/.test(value)) {
+                e.target.setCustomValidity('Amount should be a valid number with up to 2 decimal places');
+                e.target.reportValidity();
+                return; // Don't update state with invalid value
+            } else {
+                e.target.setCustomValidity('');
+            }
+        }
+        
+        // Validate and set custom  message
+        if (name === 'bankName') {
+            if (!/^[a-zA-Z\s&'-]*$/.test(value)) {
+                e.target.setCustomValidity('Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes (\')');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity(); // Show the validation message immediately
+        }
+        
+        if (name === 'payeeAccountNumber') {
+            if (!/^[0-9]*$/.test(value)) {
+                e.target.setCustomValidity('Account number should only contain digits (0-9)');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
+        if (name === 'payeeFullName') {
+            if (!/^[a-zA-Z\s'-]*$/.test(value)) {
+                e.target.setCustomValidity('Name should only contain letters, spaces, hyphens (-), and apostrophes (\')');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
+        if (name === 'payementReference') {
+            if (!/^[a-zA-Z0-9\s-]*$/.test(value)) {
+                e.target.setCustomValidity('Reference should only contain letters, numbers, spaces, and hyphens (-)');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name]: value
         });
     };
 
@@ -101,13 +151,13 @@ const CustomerMakePayment = () => {
                     <div className='form-group'>
                         <label>Amount:</label>
                         <input
-                            type="number"
+                            type="text"
                             name="amount"
                             value={formData.amount}
                             onChange={handleChange}
                             className='form-input'
-                            step="0.01"
-                            min="0.01"
+                            pattern="^\d+(\.\d{1,2})?$"
+                            title="Amount must be a valid number (e.g., 10 or 10.50)"
                             required
                         />
                     </div>  
@@ -158,6 +208,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange} 
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z\s'-]{2,100}$"
+                            title="Name should contain only letters, spaces, hyphens, and apostrophes (2-100 characters)"
+                            maxLength="100"
                         />
                     </div>
                     <div className='form-group'>
@@ -169,6 +222,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'  
                             required
+                            pattern="^[0-9]{8,20}$"
+                            title="Account number should be 8-20 digits"
+                            maxLength="20"
                         />
                     </div>       
                     <div className='form-group'>
@@ -180,6 +236,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z\s&'-]{2,100}$"
+                            title="Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes ('). No special characters like @ are allowed."
+                            maxLength="100"
                         />
                     </div>
                     <div className='form-group'>
@@ -191,6 +250,9 @@ const CustomerMakePayment = () => {
                             onChange={handleChange}
                             className='form-input'
                             required
+                            pattern="^[a-zA-Z0-9\s-]{3,50}$"
+                            title="Reference should be 3-50 characters (letters, numbers, spaces, hyphens)"
+                            maxLength="50"
                         />
                     </div>
                     <div className='form-group'>
