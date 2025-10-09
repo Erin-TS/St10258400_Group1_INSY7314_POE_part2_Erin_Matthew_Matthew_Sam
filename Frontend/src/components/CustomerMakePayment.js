@@ -29,9 +29,48 @@ const CustomerMakePayment = () => {
     }, [navigate]);
 
     const handleChange = (e) => {
+        const { name, value } = e.target;
+        
+        // Validate and set custom validity message
+        if (name === 'bankName') {
+            if (!/^[a-zA-Z\s&'-]*$/.test(value)) {
+                e.target.setCustomValidity('Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes (\')');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity(); // Show the validation message immediately
+        }
+        
+        if (name === 'payeeAccountNumber') {
+            if (!/^[0-9]*$/.test(value)) {
+                e.target.setCustomValidity('Account number should only contain digits (0-9)');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
+        if (name === 'payeeFullName') {
+            if (!/^[a-zA-Z\s'-]*$/.test(value)) {
+                e.target.setCustomValidity('Name should only contain letters, spaces, hyphens (-), and apostrophes (\')');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
+        if (name === 'payementReference') {
+            if (!/^[a-zA-Z0-9\s-]*$/.test(value)) {
+                e.target.setCustomValidity('Reference should only contain letters, numbers, spaces, and hyphens (-)');
+            } else {
+                e.target.setCustomValidity('');
+            }
+            e.target.reportValidity();
+        }
+        
         setFormData({
             ...formData,
-            [e.target.name]: e.target.value
+            [name]: value
         });
     };
 
@@ -187,7 +226,7 @@ const CustomerMakePayment = () => {
                             className='form-input'
                             required
                             pattern="^[a-zA-Z\s&'-]{2,100}$"
-                            title="Bank name should contain only letters, spaces, ampersands, hyphens, and apostrophes"
+                            title="Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes ('). No special characters like @ are allowed."
                             maxLength="100"
                         />
                     </div>
