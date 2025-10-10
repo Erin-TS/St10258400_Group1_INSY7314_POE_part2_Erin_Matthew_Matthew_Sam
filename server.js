@@ -397,17 +397,29 @@ app.post('/api/payments', verifyToken, validate([
     body('swiftCode').trim().matches(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/)
 ]), async (req, res) => {
     try {
-         const payment = {
+        // Fetch user details to get first and last name
+        const user = await db.collection('users').findOne({ 
+            _id: new ObjectId(req.user.id) 
+        });
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const payment = {
             userId: req.user.id,
             username: req.user.username,
+            customerName: `${user.firstName} ${user.lastName}`,
             ...req.body,
             status: 'pending',
             createdAt: new Date(),
             reference: `PAY${Date.now()}`
         };
-  const result = await db.collection('payments').insertOne(payment);
+        
+        const result = await db.collection('payments').insertOne(payment);
         res.json({ success: true, paymentId: result.insertedId, reference: payment.reference });
     } catch (error) {
+        console.error('Payment submission error:', error);
         res.status(500).json({ error: 'Payment submission failed' });
     }
 });
