@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './FormStyles.css';
 
+// Customer login component
 const CustomerLogin = () => {
     const[formData, setFormData] = useState({
         username: '',
@@ -9,6 +10,7 @@ const CustomerLogin = () => {
         accountNumber: ''
     });
 
+    // State to manage loading indicator
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
@@ -19,11 +21,13 @@ const CustomerLogin = () => {
         });
     };
 
+    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
+            // Make API call to login endpoint
             const response = await fetch('/api/login', {
                 method: 'POST',
                 headers: {
@@ -36,8 +40,10 @@ const CustomerLogin = () => {
             })
     });
 
+    // Parse the JSON response
             const data = await response.json();
 
+            // If login is successful, store user info and navigate to OTP verification
             if (response.ok) {
                 sessionStorage.setItem('userType', 'customer');
                 sessionStorage.setItem('isAuthenticated', 'pending');

@@ -30,9 +30,11 @@ const CustomerRegister = () => {
         });
     };
 
+    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        // validate passwords match
         if(formData.password !== formData.confirmPassword) {
             alert('Passwords do not match');
             return;
@@ -41,6 +43,7 @@ const CustomerRegister = () => {
         setLoading(true);
 
         try {
+            // Register user
             const response = await fetch('/api/register', {
                 method: 'POST',
                 headers: {
@@ -72,6 +75,7 @@ const CustomerRegister = () => {
         }
     };
 
+    // Continue to Recovery Codes
     const handleContinueToRecoveryCodes = async () => {
         setLoading(true);
         try {
@@ -102,6 +106,7 @@ const CustomerRegister = () => {
         }
     }
 
+    // Copy Recovery Codes to Clipboard
     const handleCopyToClipboard = async () => {
         try {
             const codesText = recoveryCodes.join('\n');
@@ -116,6 +121,7 @@ const CustomerRegister = () => {
         }
     };
 
+    // Download Recovery Codes
     const handleDownloadCodes = () => {
         const codesText = recoveryCodes.join('\n');
         const blob = new Blob([
@@ -143,6 +149,7 @@ const CustomerRegister = () => {
         setTimeout(() => setDownloadSuccess(false), 2000);
     };
     
+    // Continue to Login
     const handleContinueToLogin = () => {
         if (!codesSaved) {
             alert('Please save your recovery codes before continuing!');

@@ -5,7 +5,7 @@ import './FormStyles.css';
 const EmployeeViewPayments = () => {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState('all'); // Fixed: was "consr"
+    const [filter, setFilter] = useState('all'); 
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -20,13 +20,17 @@ const EmployeeViewPayments = () => {
         fetchPayments();
     }, [navigate]);
 
+    // Fetch payments from backend or use mock data
     const fetchPayments = async () => {
         setLoading(true);
         try {
+            // get payments from backend
             const response = await fetch('/api/payments', {
                 credentials: 'include'
             });
+            //get the data from the response
             const data = await response.json();
+            // set the payments state
             setPayments(data);
         } catch (error) {
             console.error('Error fetching payments:', error);
@@ -76,6 +80,7 @@ const EmployeeViewPayments = () => {
         }
     };
 
+    // Handle logout
     const handleLogout = async () => {
         try {
             await fetch('/api/logout', { 
@@ -89,6 +94,7 @@ const EmployeeViewPayments = () => {
         navigate('/employee-login');
     };
 
+    // Handle approve payment
     const handleApprove = async (paymentId) => {
         try {
             const response = await fetch(`/api/payments/${paymentId}/approve`, {
@@ -113,6 +119,7 @@ const EmployeeViewPayments = () => {
         }
     };
 
+    // Handle reject payment
     const handleReject = async (paymentId) => {
         try {
             const response = await fetch(`/api/payments/${paymentId}/reject`, {
@@ -137,16 +144,19 @@ const EmployeeViewPayments = () => {
         }   
     };
 
+    // Handle send to SWIFT this is faked
     const handleSendToSwift = (paymentId, reference) => {
         alert(`Sending payment ${reference} to SWIFT...`);
-        // You can add actual SWIFT integration logic here in the future
+        
     };
 
+    // Filter payments based on status
     const filteredPayments = payments.filter(payment => {
         if (filter === 'all') return true;
         return payment.status.toLowerCase() === filter.toLowerCase();
     });
 
+    // Get color based on status
     const getStatusColor = (status) => {
         switch (status.toLowerCase()) {
             case 'pending': 
@@ -171,6 +181,7 @@ const EmployeeViewPayments = () => {
             </div>
         );
     }
+
 
     return (
         <div className="form-container">

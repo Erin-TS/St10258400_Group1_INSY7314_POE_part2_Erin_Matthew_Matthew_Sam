@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate ,Link} from 'react-router-dom';
 import './FormStyles.css';
 
+// EmployeeLogin component
 const EmployeeLogin = () => {
     const[formData, setFormData] = useState({
         username: '',
         password: ''
     });
 
+    // Loading state
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
@@ -18,11 +20,13 @@ const EmployeeLogin = () => {
         });
     };
 
+    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
+            //call the login API
             const response = await fetch('/api/login', {
                 method: 'POST',
                 headers: {
@@ -35,6 +39,7 @@ const EmployeeLogin = () => {
 
             const data = await response.json();
 
+            // If login is successful, store user data and navigate to OTP page
             if (response.ok) {
                 sessionStorage.setItem('userType', 'employee');
                 sessionStorage.setItem('isAuthenticated', 'pending');
