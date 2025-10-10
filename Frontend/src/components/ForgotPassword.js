@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './FormStyles.css'; 
 
+// Component for handling forgot password functionality
 const ForgotPassword = () => {
 const [step, setStep] = useState(1); // 1: recovery code, 2: new password
 const [formData, setFormData] = useState({
@@ -11,18 +12,22 @@ const [formData, setFormData] = useState({
   confirmPassword: ''
 });
 
+// Loading state for async operations
 const [loading, setLoading] = useState(false);
 const [resetToken, setResetToken] = useState(null); 
 const navigate = useNavigate();
 
+// Handle input changes
 const handleChange = e =>
   setFormData({ ...formData, [e.target.name]: e.target.value });
 
+// Handle submission of recovery code
 const handleCodeSubmit = async (e) => {
   e.preventDefault();
   setLoading(true);
 
   try {
+    // Verify recovery code with backend
     const res = await fetch('/api/verify-recovery-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -31,8 +36,9 @@ const handleCodeSubmit = async (e) => {
       })
     });
 
+  
     const data = await res.json();
-    if (!data.success) throw new Error(data.message);
+    if (!data.success) throw new Error(data.message); // If verification fails, throw an error
     
     alert('Code verified! Please enter your new password.');
     setResetToken(data.resetToken); // Store the reset token
@@ -45,6 +51,7 @@ const handleCodeSubmit = async (e) => {
   
 };
 
+// Handle submission of new password
 const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     

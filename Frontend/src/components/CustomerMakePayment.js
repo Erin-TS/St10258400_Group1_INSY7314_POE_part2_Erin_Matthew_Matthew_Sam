@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';
 
+// Customer Make Payment Component
 const CustomerMakePayment = () => {
     const [formData, setFormData] = useState({
         amount: '',
@@ -17,6 +18,7 @@ const CustomerMakePayment = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    //useEffect to check authentication and user type
     useEffect(() => {
         const isAuthenticated = sessionStorage.getItem('isAuthenticated');
         const userType = sessionStorage.getItem('userType');
@@ -28,6 +30,7 @@ const CustomerMakePayment = () => {
         }
     }, [navigate]);
 
+    // Handle input changes with validation
     const handleChange = (e) => {
         const { name, value } = e.target;
         
@@ -52,6 +55,7 @@ const CustomerMakePayment = () => {
             e.target.reportValidity(); // Show the validation message immediately
         }
         
+        // Validate and set custom message
         if (name === 'payeeAccountNumber') {
             if (!/^[0-9]*$/.test(value)) {
                 e.target.setCustomValidity('Account number should only contain digits (0-9)');
@@ -60,6 +64,7 @@ const CustomerMakePayment = () => {
             }
             e.target.reportValidity();
         }
+        // Validate and set custom message
         
         if (name === 'payeeFullName') {
             if (!/^[a-zA-Z\s'-]*$/.test(value)) {
@@ -69,6 +74,8 @@ const CustomerMakePayment = () => {
             }
             e.target.reportValidity();
         }
+
+        // Validate and set custom message
         
         if (name === 'payementReference') {
             if (!/^[a-zA-Z0-9\s-]*$/.test(value)) {
@@ -85,10 +92,12 @@ const CustomerMakePayment = () => {
         });
     };
 
+    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
        try {
+        // Client-side validation
         const response = await fetch('/api/payments', {
             method: 'POST',
             headers: {
@@ -124,6 +133,7 @@ const CustomerMakePayment = () => {
         }
     };
 
+    // Handle logout
     const handleLogout = async () => {
         try {
             await fetch('/api/logout', { 

@@ -1,7 +1,9 @@
+// this is the OTP component for handling TOTP verification
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './FormStyles.css';
 
+// OTP component
 const OTP = () => {
     const [otpValue, setOtpValue] = useState('');
     const [loading, setLoading] = useState(false);
@@ -10,6 +12,7 @@ const OTP = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
+    // use effect hook to set userType from location state or session storage
 useEffect(() => {
     const typeFromState = location.state?.userType;
     const typeFromStorage = sessionStorage.getItem('userType');
@@ -24,12 +27,14 @@ useEffect(() => {
 }, [location.state, navigate]); 
 
 
+// Handle form submission
     const handleSubmit =  async(e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
 
         try {
+            // Call backend to verify OTP
             const response = await fetch('/api/verify-totp', {
                 method: 'POST',
                 headers: {
@@ -40,9 +45,9 @@ useEffect(() => {
             });
             const data = await response.json();
             if (response.ok && data.success ) {
-                
+                // OTP verified successfully
             sessionStorage.setItem('isAuthenticated', 'true');
-            
+            // Redirect based on user type
         if(userType === 'customer') {
             navigate('/customer-make-payment');
         } else if (userType === 'employee') {

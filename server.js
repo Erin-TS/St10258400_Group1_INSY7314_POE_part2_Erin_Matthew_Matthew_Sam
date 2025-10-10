@@ -6,11 +6,10 @@ import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import qrcode from 'qrcode';
-import speakeasy from 'speakeasy';
+import qrcode from 'qrcode'; // qr generation
+import speakeasy from 'speakeasy'; // for totp generation
 import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
-
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
 // import mongoSanitize from 'express-mongo-sanitize'; // Incompatible with Node.js v22
@@ -46,7 +45,7 @@ app.use((_, res, next) => {
 // info-leaking hardening headers
 // prevents url paths leaking to external sites
 app.use((_, res, next) => {
-  res.set('X-Content-Type-Options', 'nosniff');   // stop MIME-sniff
+  res.set('X-Content-Type-Options', 'nosniff');   
   res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
@@ -87,7 +86,7 @@ app.use(apiLimiter);
 // Apply specific rate limiting to authentication routes
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 6, // limit each IP to 6 requests per window
+    max: 6, // changed from 5 to 6 (was to restrictive in testing limit each IP to 6 requests per window
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many attempts, please try again later.' }
@@ -150,6 +149,7 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'Frontend/dist')));
 
+//generate fingerprint from user-agent and IP address
 const generateFingerprint = (req) => {
     const userAgent = req.headers['user-agent'] || '';
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
@@ -158,10 +158,12 @@ const generateFingerprint = (req) => {
     return crypto.createHash('sha256').update(fingerprintData).digest('hex');
 };
 
+// get client IP address
 const getClientIP = (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 };
 
+// Middleware to verify JWT and fingerprint
 const verifyToken = (req, res, next) => {
     const token = req.cookies.authToken;
     if (!token) {
@@ -182,6 +184,7 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+// Middleware to validate input using express-validator
 const validate = rules => [                                  
   ...rules,
   (req, res, next) => {
@@ -192,7 +195,6 @@ const validate = rules => [
 ];
 
 // API routes
-
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Backend server is working!' });
 });
@@ -265,6 +267,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
             }
         }
 
+        // If valid, generate JWT with fingerprint and IP
         if (isValid) {
             const fingerprint = generateFingerprint(req);
             const clientIP = getClientIP(req);
@@ -427,8 +430,8 @@ app.post('/api/payments', verifyToken, validate([
 //get payments endpoint to retrieve payment history
 app.get('/api/payments', verifyToken, async (req, res) => {
     try {
-        const payments = await db.collection('payments').find({}).toArray();
-        res.json(payments);  // ← Changed from res.json({ payments })
+        const payments = await db.collection('payments').find({}).toArray(); 
+        res.json(payments);  
     } catch (error) {
         res.status(500).json({ error: 'Failed to retrieve payments' });
     }
@@ -531,6 +534,7 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
+        // Verify TOTP token
         const isTokenValid = speakeasy.totp.verify({
             secret: user.totpSecret,
             encoding: 'base32',
@@ -538,6 +542,7 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
             window: 2 
         });
 
+        // If valid, mark TOTP as enabled if not already
         if (isTokenValid) {
             if (!user.totpEnabled) {
                 await db.collection('users').updateOne(
@@ -572,16 +577,20 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
+        // Fetch user details
         const user = await db.collection('users').findOne({
             $or: [
                 { _id: new ObjectId(userId) },
                 { username: req.user.username }
             ]
         });
+
+        // If user not found
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
+      // generate new TOTP secret url for the qr code
         const otpAuthUrl = speakeasy.otpauthURL({
             secret: user.totpSecret,
             label: user.username,
@@ -589,8 +598,10 @@ app.get('/api/setup-totp', verifyToken, async (req, res) => {
             encoding: 'base32'
         });
 
+        // Generate QR code data URL
         const qrCodeUrl = await qrcode.toDataURL(otpAuthUrl);
 
+        // Send QR code and secret to user
         res.json({
             qrCode: qrCodeUrl,
             totpSecret: user.totpSecret
@@ -630,6 +641,7 @@ app.post('/api/verify-recovery-code', validate([
     body('recoveryCode').trim().escape().notEmpty().matches(/^[A-F0-9]{8}$/)
 ]), async (req, res) => {
     try {
+        // Validate input
         const { username, recoveryCode } = req.body;
         console.log('>>> username:', username, 'recoveryCode:', recoveryCode);
         if (!username || !recoveryCode)           
@@ -644,6 +656,7 @@ app.post('/api/verify-recovery-code', validate([
         const remaining = [];
 
     
+        // Check each hashed code
         for (const hash of user.recoveryCodes) {
         const ok = await bcrypt.compare(recoveryCode.trim().toUpperCase(), hash);
        
@@ -660,6 +673,7 @@ app.post('/api/verify-recovery-code', validate([
         );
         console.log('>>> update matched:', up.matchedCount, 'modified:', up.modifiedCount); 
 
+        // issue short-lived reset token
         const resetToken = jwt.sign(
             { userId: user._id.toString(), purpose: 'password-reset' },
             process.env.JWT_SECRET,
@@ -680,23 +694,28 @@ app.post('/api/reset-password', validate([
 ]),
     async (req, res) => {
     try {
+        // Validate input
         const { resetToken, newPassword } = req.body;
         if (!resetToken || !newPassword)
         return res.status(400).json({ success: false, message: 'Token and password required' });
 
+        // verify token
         let decoded;
         try { decoded = jwt.verify(resetToken, process.env.JWT_SECRET); }
         catch { return res.status(400).json({ success: false, message: 'Invalid or expired token' }); }
 
+        // check purpose
         if (decoded.purpose !== 'password-reset')
         return res.status(400).json({ success: false, message: 'Bad token' });
 
+        // find user
         const hash = await bcrypt.hash(newPassword, 10);
         await db.collection('users').updateOne(
         { _id: new ObjectId(decoded.userId) },
         { $set: { password: hash } }
         );
 
+        // invalidate all existing sessions by changing a field (not implemented here)
         res.json({ success: true, message: 'Password reset – please log in again' });
     } catch (err) {
         console.error(err);
@@ -710,19 +729,26 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
         const { userId } = req.body;
         console.log('Recovery codes request - userId:', userId);
         
+        // Validate userId
         if (!userId) {
             console.log('Error: No userId provided');
             return res.status(400).json({ success: false, message: 'User ID required' });
         }
 
+        // Fetch user details
         const user = await db.collection('users').findOne({ _id: new ObjectId(userId) });
         console.log('User found:', user ? 'Yes' : 'No');
         
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    
         if (user.recoveryCodes?.length)   // already generated
         return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
 
+        // Generate 10 new recovery codes
+        // Each code is 8 chars (4 bytes hex)
+        // Store only hashed versions
+        // Return only plain codes to user (only time they see them)
         const plainCodes = [];
         const hashedCodes = [];
 
@@ -754,12 +780,13 @@ if (HTTPS_ENABLED) {
     
     const httpsServer = https.createServer(credentials, app);
     
+    // Set timeouts to mitigate slowloris attacks
     httpsServer.timeout = 30000;
     httpsServer.keepAliveTimeout = 5000;
     httpsServer.headersTimeout = 6000;
     
     httpsServer.listen(HTTPS_PORT, () => {
-        console.log(`🔒 HTTPS Server is running on port ${HTTPS_PORT}`);
+        console.log(` HTTPS Server is running on port ${HTTPS_PORT}`);
         console.log(`   Frontend: https://localhost:${HTTPS_PORT}`);
         console.log(`   API: https://localhost:${HTTPS_PORT}/api`);
     });
@@ -771,11 +798,11 @@ if (HTTPS_ENABLED) {
     
     const httpServer = http.createServer(httpApp);
     httpServer.listen(HTTP_PORT, () => {
-        console.log(`🔓 HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
+        console.log(` HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
     });
 } else {
     const server = app.listen(HTTP_PORT, () => {
-        console.log(`⚠️  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
+        console.log(`  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
         console.log(`   Frontend: http://localhost:${HTTP_PORT}`);
         console.log(`   API: http://localhost:${HTTP_PORT}/api`);
     });
