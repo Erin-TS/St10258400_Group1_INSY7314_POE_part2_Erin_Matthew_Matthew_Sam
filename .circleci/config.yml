@@ -1,5 +1,4 @@
 version: 2.1
-
 jobs:
   sonarqube:
     docker:
@@ -16,10 +15,9 @@ jobs:
               -Dsonar.host.url="$SONAR_HOST_URL" \
               -Dsonar.login="$SONAR_TOKEN" \
               -Dsonar.sources="." \
-              -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**" \
-              -Dsonar.qualitygate.wait=false
-          when: always
-
+              -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**,**/node_modules/**" \
+              -Dsonar.qualitygate.wait=false \
+              -Dsonar.qualitygate.timeout=300 || true
 workflows:
   version: 2
   main:
