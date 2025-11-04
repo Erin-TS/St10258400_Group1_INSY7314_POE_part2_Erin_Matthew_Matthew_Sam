@@ -16,12 +16,12 @@ import helmet from 'helmet'; // Import Helmet for security headers
 import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
-import { ok } from 'assert';
+import { ok } from 'assert'; 
 import { getCertificatePaths } from './utils/generateCerts.js';
-import cookieParser from 'cookie-parser';
-import session from 'express-session';
-import { body, validationResult } from 'express-validator';
-import { safeHTML } from './utils/sanitize.js';
+import cookieParser from 'cookie-parser'; 
+import session from 'express-session'; 
+import { body, validationResult } from 'express-validator';  // import express-validator for input validation
+import { safeHTML } from './utils/sanitize.js'; // custom HTML sanitizer
 
 // Load environment variables
 dotenv.config();
@@ -36,7 +36,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
+// hides the express framework details
 app.disable('x-powered-by');
+// XSS protection headers that activate browser XSS filters and block attacks
 app.use((_, res, next) => {                 
   res.set('X-XSS-Protection', '1; mode=block');
   next();
@@ -163,6 +165,84 @@ const getClientIP = (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 };
 
+// Helper function to format user data
+const formatUserData = (user) => {
+    return {
+        id: user._id,
+        username: user.username,
+        accountNumber: user.accountNumber,
+        role: user.role,
+        totpEnabled: user.totpEnabled || false
+    };
+};
+
+// Helper function to authenticate employee
+const authenticateEmployee = async (username, password, accountNumber, db) => {
+    if (username !== 'employee' || password !== 'password123' || accountNumber) {
+        return null;
+    }
+
+    const employeeUser = await db.collection('users').findOne({ username: 'employee' });
+    
+    if (!employeeUser) {
+        throw new Error('Employee not configured');
+    }
+
+    return formatUserData(employeeUser);
+};
+
+// Helper function to authenticate regular user
+const authenticateRegularUser = async (username, password, accountNumber, db) => {
+    const user = await db.collection('users').findOne({ username: username.toString() });
+    
+    if (!user) {
+        return null;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
+    if (!isPasswordValid) {
+        return null;
+    }
+
+    if (accountNumber && user.accountNumber !== accountNumber) {
+        throw new Error('Invalid credentials');
+    }
+
+    return formatUserData(user);
+};
+
+// Helper function to generate JWT and set cookie
+const generateAuthToken = (userData, req, res) => {
+    const fingerprint = generateFingerprint(req);
+    const clientIP = getClientIP(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    const token = jwt.sign(
+        { 
+            id: userData.id, 
+            username: userData.username, 
+            accountNumber: userData.accountNumber,
+            fingerprint: fingerprint,
+            ip: clientIP,
+            ua: userAgent,
+            role: userData.role,
+            iat: Math.floor(Date.now() / 1000)
+        },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+
+    res.cookie('authToken', token, {
+        httpOnly: true,
+        secure: HTTPS_ENABLED,
+        sameSite: 'strict',
+        maxAge: 3600000
+    });
+
+    return token;
+};
+
 // Middleware to verify JWT and fingerprint
 const verifyToken = (req, res, next) => {
     const token = req.cookies.authToken;
@@ -216,7 +296,6 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-
 // Login route with auth rate limiting and validation
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
@@ -228,81 +307,37 @@ app.post('/api/login', authLimiter, async (req, res) => {
 
         const { username, password, accountNumber } = value;
 
-        let isValid = false;
         let userData = null;
 
-        if (username === 'employee' && password === 'password123' && !accountNumber) {
-            const employeeUser = await db.collection('users').findOne({ username: 'employee' });
+        // Try employee authentication first
+        try {
+            userData = await authenticateEmployee(username, password, accountNumber, db);
+        } catch (error) {
+            return res.status(401).json({ error: error.message });
+        }
 
-            if (employeeUser) {
-                isValid= true;
-                userData = { 
-                    id: employeeUser._id,
-                    username: employeeUser.username,
-                    accountNumber: employeeUser.accountNumber,
-                    role: employeeUser.role,
-                    totpEnabled: employeeUser.totpEnabled || false 
-                };
-            } else {
-                return res.status(401).json({ error: 'Employee not configured' });
-            }
-        } else {
-            const user = await db.collection('users').findOne({ username });
-            if (user) {
-                const isPasswordValid = await bcrypt.compare(password, user.password);
-                if (isPasswordValid) {
-                    if (accountNumber && user.accountNumber !== accountNumber) {
-                        return res.status(401).json({ error: 'Invalid credentials' });
-                    }
-                
-                    isValid = true;
-                    userData = { 
-                        id: user._id, 
-                        username: user.username, 
-                        accountNumber: user.accountNumber,
-                        role: user.role,
-                        totpEnabled: user.totpEnabled || false 
-                    };
-                }
+        // If not employee, try regular user authentication
+        if (!userData) {
+            try {
+                userData = await authenticateRegularUser(username, password, accountNumber, db);
+            } catch (error) {
+                return res.status(401).json({ error: error.message });
             }
         }
 
-        // If valid, generate JWT with fingerprint and IP
-        if (isValid) {
-            const fingerprint = generateFingerprint(req);
-            const clientIP = getClientIP(req);
-            const userAgent = req.headers['user-agent'] || 'unknown';
-            
-            const token = jwt.sign(
-                { 
-                    id: userData.id, 
-                    username: userData.username, 
-                    accountNumber: userData.accountNumber,
-                    fingerprint: fingerprint,
-                    ip: clientIP,
-                    ua: userAgent,
-                    role: userData.role,
-                    iat: Math.floor(Date.now() / 1000)
-                },
-                JWT_SECRET,
-                { expiresIn: '1h' }
-            );
-
-            res.cookie('authToken', token, {
-                httpOnly: true,
-                secure: HTTPS_ENABLED,
-                sameSite: 'strict',
-                maxAge: 3600000
-            });
-
-            res.json({
-                message: 'Login successful',
-                user: userData,
-                requiresMFA: true
-            });
-        } else {
-            res.status(401).json({ error: 'Invalid credentials' });
+        // If authentication failed
+        if (!userData) {
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        // Generate JWT and set cookie
+        generateAuthToken(userData, req, res);
+
+        res.json({
+            message: 'Login successful',
+            user: userData,
+            requiresMFA: true
+        });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -347,7 +382,8 @@ app.post('/api/register', authLimiter, validate([
 
         const { firstName, lastName, idNumber, accountNumber, username, password } = value;
         
-        const existingUser = await db.collection('users').findOne({ username });
+        // Explicitly convert to string to prevent NoSQL injection
+        const existingUser = await db.collection('users').findOne({ username: String(username) });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
@@ -371,7 +407,7 @@ app.post('/api/register', authLimiter, validate([
             totpEnabled: false, // Initially disabled until after first sucessful login
             role: 'customer',
             recoveryCodes: [], // No recovery codes initially
-            recoveryCodesGeneratedAt: null
+            recoveryCodesGeneratedAt: null //generation timestamp
         });
 
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
@@ -647,7 +683,8 @@ app.post('/api/verify-recovery-code', validate([
         if (!username || !recoveryCode)           
         return res.status(400).json({ success: false, message: 'Username and code required' });
 
-        const user = await db.collection('users').findOne({ username });
+        // Explicitly convert to string to prevent NoSQL injection
+        const user = await db.collection('users').findOne({ username: String(username) });
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
         if (!user.recoveryCodes?.length)
         return res.status(400).json({ success: false, message: 'No recovery codes' });
@@ -687,7 +724,7 @@ app.post('/api/verify-recovery-code', validate([
     }
 });
 
-// Reset password route
+// Reset password route with validation checks
 app.post('/api/reset-password', validate([
     body('resetToken').isJWT(),
   body('newPassword').isStrongPassword()
@@ -723,7 +760,7 @@ app.post('/api/reset-password', validate([
     }
 });
 
-// generate recovery codes after MFA setup
+// generate recovery codes and return new recovery codes after MFA setup
 app.post('/api/generate-recovery-codes', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -741,7 +778,6 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
         
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    
         if (user.recoveryCodes?.length)   // already generated
         return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
 
@@ -752,12 +788,14 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
         const plainCodes = [];
         const hashedCodes = [];
 
+        // code generation loop, generates secure unique codes
         for (let i = 0; i < 10; i++) {
         const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8-char
         plainCodes.push(code);
         hashedCodes.push(await bcrypt.hash(code, 10));
         }
 
+        // Store hashed codes in DB for user
         await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
         { $set: { recoveryCodes: hashedCodes, recoveryCodesGeneratedAt: new Date() } }
@@ -793,7 +831,20 @@ if (HTTPS_ENABLED) {
     
     const httpApp = express();
     httpApp.use((req, res) => {
-        res.redirect(301, `https://${req.headers.host.replace(/:\d+$/, `:${HTTPS_PORT}`)}${req.url}`);
+        const host = req.headers.host;
+        const allowedHosts = ['localhost', '127.0.0.1'];
+        
+        // Extract hostname without port
+        const hostname = host ? host.split(':')[0] : '';
+        
+        // Validate host is allowed
+        if (!allowedHosts.includes(hostname)) {
+            return res.status(400).send('Bad Request');
+        }
+        
+        // Redirect to HTTPS root - do not use user-controlled path to prevent open redirect attacks
+        const redirectUrl = `https://${hostname}:${HTTPS_PORT}/`;
+        res.redirect(301, redirectUrl);
     });
     
     const httpServer = http.createServer(httpApp);

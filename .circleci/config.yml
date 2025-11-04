@@ -16,7 +16,7 @@ jobs:
               -Dsonar.host.url="$SONAR_HOST_URL" \
               -Dsonar.login="$SONAR_TOKEN" \
               -Dsonar.sources="." \
-              -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**" \
+              -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**"
               -Dsonar.qualitygate.wait=false
           when: always
 

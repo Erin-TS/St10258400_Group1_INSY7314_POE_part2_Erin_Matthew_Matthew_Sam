@@ -19,6 +19,6 @@ try {
 }
 
 // Access database from connected client
-let db = client.db("INSY7314-Cluster");
+const db = client.db("INSY7314-Cluster");
 
 export default db;
