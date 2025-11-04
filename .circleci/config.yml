@@ -6,8 +6,6 @@ jobs:
       - image: sonarsource/sonar-scanner-cli:latest
     steps:
       - checkout
-      - setup_remote_docker:
-          version: 20.10.7
       - run:
           name: Run SonarCloud Scan
           command: |
