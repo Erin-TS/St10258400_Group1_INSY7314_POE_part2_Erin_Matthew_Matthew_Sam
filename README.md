@@ -83,6 +83,23 @@ The application will be available at:
 * Frontend: https://localhost:5443
 * Backend API: https://localhost:5443/api
 
+## Code Quality and Security Analysis
+Our repository is configured with a Continuous Integration (CI) pipeline that automatically analyses code quality and security on every push or pull request to the `main` branch. 
+
+### **Pipeline**
+*CircleCI* powers our CI/CD pipeline and uses *SonarQube* for static code analysis. The integration of both ensures that code is not only functional but also clean, maintainable, and secure.
+
+### **CircleCI**
+It minimises manual errors and increases productivity. It provides an added layer of security our program.
+
+### **SonarQube**
+It performs automated code reviews to detect and fix issues with speed and precision. It provides continuous feedback on the quality and security of the code and scans for potential problems, such as:
+
+* **Security vulnerabilities:** detects potential security flaws like weak cryptography and injection risks that attackers could exploit. 
+* **Coding errors/bugs:** Real programming errors that could lead to crashes or unexpected behaviour
+* **Code smells/violations:** structural issues that make the code difficult to maintain.
+* **Duplications:** ensures there are no repeated code blocks.
+
 ## **Contributors**🤝
 
 * ![Erin Steenveld](https://github.com/Erin-TS.png?size=20) **Erin Steenveld** (St10258400) [@Erin-TS](https://github.com/Erin-TS)
