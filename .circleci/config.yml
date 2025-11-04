@@ -17,6 +17,8 @@ jobs:
               -Dsonar.login="$SONAR_TOKEN" \
               -Dsonar.sources="." \
               -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**"
+              -Dsonar.qualitygate.wait=false
+          when: always
 
 workflows:
   version: 2
