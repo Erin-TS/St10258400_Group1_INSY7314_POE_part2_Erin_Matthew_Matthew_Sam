@@ -247,7 +247,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
                 return res.status(401).json({ error: 'Employee not configured' });
             }
         } else {
-            const user = await db.collection('users').findOne({ username });
+const user = await db.collection('users').findOne({ username: username.toString() });
             if (user) {
                 const isPasswordValid = await bcrypt.compare(password, user.password);
                 if (isPasswordValid) {
