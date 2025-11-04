@@ -16,12 +16,12 @@ import helmet from 'helmet'; // Import Helmet for security headers
 import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
-import { ok } from 'assert';
+import { ok } from 'assert'; 
 import { getCertificatePaths } from './utils/generateCerts.js';
-import cookieParser from 'cookie-parser';
-import session from 'express-session';
-import { body, validationResult } from 'express-validator';
-import { safeHTML } from './utils/sanitize.js';
+import cookieParser from 'cookie-parser'; 
+import session from 'express-session'; 
+import { body, validationResult } from 'express-validator';  // import express-validator for input validation
+import { safeHTML } from './utils/sanitize.js'; // custom HTML sanitizer
 
 // Load environment variables
 dotenv.config();
@@ -36,7 +36,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const HTTPS_ENABLED = process.env.HTTPS_ENABLED !== 'false';
 
+// hides the express framework details
 app.disable('x-powered-by');
+// XSS protection headers that activate browser XSS filters and block attacks
 app.use((_, res, next) => {                 
   res.set('X-XSS-Protection', '1; mode=block');
   next();
@@ -216,7 +218,6 @@ app.get('/api/db-test', async (req, res) => {
     }
 });
 
-
 // Login route with auth rate limiting and validation
 app.post('/api/login', authLimiter, async (req, res) => {
     try {
@@ -371,7 +372,7 @@ app.post('/api/register', authLimiter, validate([
             totpEnabled: false, // Initially disabled until after first sucessful login
             role: 'customer',
             recoveryCodes: [], // No recovery codes initially
-            recoveryCodesGeneratedAt: null
+            recoveryCodesGeneratedAt: null //generation timestamp
         });
 
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
@@ -687,7 +688,7 @@ app.post('/api/verify-recovery-code', validate([
     }
 });
 
-// Reset password route
+// Reset password route with validation checks
 app.post('/api/reset-password', validate([
     body('resetToken').isJWT(),
   body('newPassword').isStrongPassword()
@@ -723,7 +724,7 @@ app.post('/api/reset-password', validate([
     }
 });
 
-// generate recovery codes after MFA setup
+// generate recovery codes and return new recovery codes after MFA setup
 app.post('/api/generate-recovery-codes', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -741,7 +742,6 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
         
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    
         if (user.recoveryCodes?.length)   // already generated
         return res.status(400).json({ success: false, message: 'Codes already exist', alreadyGenerated: true });
 
@@ -752,12 +752,14 @@ app.post('/api/generate-recovery-codes', async (req, res) => {
         const plainCodes = [];
         const hashedCodes = [];
 
+        // code generation loop, generates secure unique codes
         for (let i = 0; i < 10; i++) {
         const code = crypto.randomBytes(4).toString('hex').toUpperCase(); // 8-char
         plainCodes.push(code);
         hashedCodes.push(await bcrypt.hash(code, 10));
         }
 
+        // Store hashed codes in DB for user
         await db.collection('users').updateOne(
         { _id: new ObjectId(userId) },
         { $set: { recoveryCodes: hashedCodes, recoveryCodesGeneratedAt: new Date() } }
