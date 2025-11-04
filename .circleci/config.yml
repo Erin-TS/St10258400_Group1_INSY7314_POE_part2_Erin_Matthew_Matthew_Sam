@@ -1,0 +1,25 @@
+version: 2.1
+
+jobs:
+  sonarqube:
+    docker:
+      - image: sonarsource/sonar-scanner-cli:latest
+    steps:
+      - checkout
+      - run:
+          name: Run SonarCloud Scan
+          command: |
+            echo "Running SonarCloud scan..."
+            sonar-scanner \
+              -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+              -Dsonar.organization="$SONAR_ORG" \
+              -Dsonar.host.url="$SONAR_HOST_URL" \
+              -Dsonar.login="$SONAR_TOKEN" \
+              -Dsonar.sources="." \
+              -Dsonar.exclusions="**/test/**,**/android/**,**/ios/**"
+
+workflows:
+  version: 2
+  main:
+    jobs:
+      - sonarqube
