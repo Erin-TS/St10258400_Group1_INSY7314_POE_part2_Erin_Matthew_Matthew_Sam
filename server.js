@@ -347,7 +347,8 @@ app.post('/api/register', authLimiter, validate([
 
         const { firstName, lastName, idNumber, accountNumber, username, password } = value;
         
-        const existingUser = await db.collection('users').findOne({ username });
+        // Explicitly convert to string to prevent NoSQL injection
+        const existingUser = await db.collection('users').findOne({ username: String(username) });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
@@ -647,7 +648,8 @@ app.post('/api/verify-recovery-code', validate([
         if (!username || !recoveryCode)           
         return res.status(400).json({ success: false, message: 'Username and code required' });
 
-        const user = await db.collection('users').findOne({ username });
+        // Explicitly convert to string to prevent NoSQL injection
+        const user = await db.collection('users').findOne({ username: String(username) });
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
         if (!user.recoveryCodes?.length)
         return res.status(400).json({ success: false, message: 'No recovery codes' });
@@ -804,14 +806,8 @@ if (HTTPS_ENABLED) {
             return res.status(400).send('Bad Request');
         }
         
-        // Validate URL path is safe (prevent path traversal)
-        const url = req.url;
-        if (url.includes('..') || url.includes('%2e%2e')) {
-            return res.status(400).send('Bad Request');
-        }
-        
-        // Construct safe redirect URL
-        const redirectUrl = `https://${hostname}:${HTTPS_PORT}${url}`;
+        // Redirect to HTTPS root - do not use user-controlled path to prevent open redirect attacks
+        const redirectUrl = `https://${hostname}:${HTTPS_PORT}/`;
         res.redirect(301, redirectUrl);
     });
     
