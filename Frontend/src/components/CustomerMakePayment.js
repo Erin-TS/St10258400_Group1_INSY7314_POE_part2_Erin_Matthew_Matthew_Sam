@@ -2,6 +2,52 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';
 
+// Validation configuration object
+const validationRules = {
+    amount: {
+        pattern: /^\d*\.?\d{0,2}$/,
+        message: 'Amount should be a valid number with up to 2 decimal places',
+        reportImmediately: false
+    },
+    bankName: {
+        pattern: /^[a-zA-Z\s&'-]*$/,
+        message: 'Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes (\')',
+        reportImmediately: true
+    },
+    payeeAccountNumber: {
+        pattern: /^[0-9]*$/,
+        message: 'Account number should only contain digits (0-9)',
+        reportImmediately: true
+    },
+    payeeFullName: {
+        pattern: /^[a-zA-Z\s'-]*$/,
+        message: 'Name should only contain letters, spaces, hyphens (-), and apostrophes (\')',
+        reportImmediately: true
+    },
+    payementReference: {
+        pattern: /^[a-zA-Z0-9\s-]*$/,
+        message: 'Reference should only contain letters, numbers, spaces, and hyphens (-)',
+        reportImmediately: true
+    }
+};
+
+// Generic field validation function
+const validateField = (fieldName, value, element) => {
+    const rule = validationRules[fieldName];
+    if (!rule) return true;
+    
+    if (value && !rule.pattern.test(value)) {
+        element.setCustomValidity(rule.message);
+        if (rule.reportImmediately) {
+            element.reportValidity();
+        }
+        return false;
+    }
+    
+    element.setCustomValidity('');
+    return true;
+};
+
 // Customer Make Payment Component
 const CustomerMakePayment = () => {
     const [formData, setFormData] = useState({
@@ -34,62 +80,16 @@ const CustomerMakePayment = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         
-        // Validate amount - only allow positive numbers with up to 2 decimal places
-        if (name === 'amount') {
-            if (value && !/^\d*\.?\d{0,2}$/.test(value)) {
-                e.target.setCustomValidity('Amount should be a valid number with up to 2 decimal places');
-                e.target.reportValidity();
-                return; // Don't update state with invalid value
-            } else {
-                e.target.setCustomValidity('');
-            }
+        // Validate field using generic validation function
+        if (!validateField(name, value, e.target)) {
+            return; // Don't update state with invalid value
         }
         
-        // Validate and set custom  message
-        if (name === 'bankName') {
-            if (!/^[a-zA-Z\s&'-]*$/.test(value)) {
-                e.target.setCustomValidity('Bank name should only contain letters, spaces, ampersands (&), hyphens (-), and apostrophes (\')');
-            } else {
-                e.target.setCustomValidity('');
-            }
-            e.target.reportValidity(); // Show the validation message immediately
-        }
-        
-        // Validate and set custom message
-        if (name === 'payeeAccountNumber') {
-            if (!/^[0-9]*$/.test(value)) {
-                e.target.setCustomValidity('Account number should only contain digits (0-9)');
-            } else {
-                e.target.setCustomValidity('');
-            }
-            e.target.reportValidity();
-        }
-        // Validate and set custom message
-        
-        if (name === 'payeeFullName') {
-            if (!/^[a-zA-Z\s'-]*$/.test(value)) {
-                e.target.setCustomValidity('Name should only contain letters, spaces, hyphens (-), and apostrophes (\')');
-            } else {
-                e.target.setCustomValidity('');
-            }
-            e.target.reportValidity();
-        }
-
-        // Validate and set custom message
-        
-        if (name === 'payementReference') {
-            if (!/^[a-zA-Z0-9\s-]*$/.test(value)) {
-                e.target.setCustomValidity('Reference should only contain letters, numbers, spaces, and hyphens (-)');
-            } else {
-                e.target.setCustomValidity('');
-            }
-            e.target.reportValidity();
-        }
-        
-        setFormData({
-            ...formData,
+        // Update form data
+        setFormData(prev => ({
+            ...prev,
             [name]: value
-        });
+        }));
     };
 
     // Handle form submission
