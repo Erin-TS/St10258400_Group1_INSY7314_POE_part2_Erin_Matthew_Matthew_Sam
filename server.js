@@ -247,7 +247,7 @@ app.post('/api/login', authLimiter, async (req, res) => {
                 return res.status(401).json({ error: 'Employee not configured' });
             }
         } else {
-            const user = await db.collection('users').findOne({ username });
+const user = await db.collection('users').findOne({ username: username.toString() });
             if (user) {
                 const isPasswordValid = await bcrypt.compare(password, user.password);
                 if (isPasswordValid) {
@@ -793,7 +793,26 @@ if (HTTPS_ENABLED) {
     
     const httpApp = express();
     httpApp.use((req, res) => {
-        res.redirect(301, `https://${req.headers.host.replace(/:\d+$/, `:${HTTPS_PORT}`)}${req.url}`);
+        const host = req.headers.host;
+        const allowedHosts = ['localhost', '127.0.0.1'];
+        
+        // Extract hostname without port
+        const hostname = host ? host.split(':')[0] : '';
+        
+        // Validate host is allowed
+        if (!allowedHosts.includes(hostname)) {
+            return res.status(400).send('Bad Request');
+        }
+        
+        // Validate URL path is safe (prevent path traversal)
+        const url = req.url;
+        if (url.includes('..') || url.includes('%2e%2e')) {
+            return res.status(400).send('Bad Request');
+        }
+        
+        // Construct safe redirect URL
+        const redirectUrl = `https://${hostname}:${HTTPS_PORT}${url}`;
+        res.redirect(301, redirectUrl);
     });
     
     const httpServer = http.createServer(httpApp);
