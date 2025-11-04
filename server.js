@@ -163,6 +163,84 @@ const getClientIP = (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 };
 
+// Helper function to format user data
+const formatUserData = (user) => {
+    return {
+        id: user._id,
+        username: user.username,
+        accountNumber: user.accountNumber,
+        role: user.role,
+        totpEnabled: user.totpEnabled || false
+    };
+};
+
+// Helper function to authenticate employee
+const authenticateEmployee = async (username, password, accountNumber, db) => {
+    if (username !== 'employee' || password !== 'password123' || accountNumber) {
+        return null;
+    }
+
+    const employeeUser = await db.collection('users').findOne({ username: 'employee' });
+    
+    if (!employeeUser) {
+        throw new Error('Employee not configured');
+    }
+
+    return formatUserData(employeeUser);
+};
+
+// Helper function to authenticate regular user
+const authenticateRegularUser = async (username, password, accountNumber, db) => {
+    const user = await db.collection('users').findOne({ username: username.toString() });
+    
+    if (!user) {
+        return null;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
+    if (!isPasswordValid) {
+        return null;
+    }
+
+    if (accountNumber && user.accountNumber !== accountNumber) {
+        throw new Error('Invalid credentials');
+    }
+
+    return formatUserData(user);
+};
+
+// Helper function to generate JWT and set cookie
+const generateAuthToken = (userData, req, res) => {
+    const fingerprint = generateFingerprint(req);
+    const clientIP = getClientIP(req);
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    const token = jwt.sign(
+        { 
+            id: userData.id, 
+            username: userData.username, 
+            accountNumber: userData.accountNumber,
+            fingerprint: fingerprint,
+            ip: clientIP,
+            ua: userAgent,
+            role: userData.role,
+            iat: Math.floor(Date.now() / 1000)
+        },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+
+    res.cookie('authToken', token, {
+        httpOnly: true,
+        secure: HTTPS_ENABLED,
+        sameSite: 'strict',
+        maxAge: 3600000
+    });
+
+    return token;
+};
+
 // Middleware to verify JWT and fingerprint
 const verifyToken = (req, res, next) => {
     const token = req.cookies.authToken;
@@ -228,81 +306,37 @@ app.post('/api/login', authLimiter, async (req, res) => {
 
         const { username, password, accountNumber } = value;
 
-        let isValid = false;
         let userData = null;
 
-        if (username === 'employee' && password === 'password123' && !accountNumber) {
-            const employeeUser = await db.collection('users').findOne({ username: 'employee' });
+        // Try employee authentication first
+        try {
+            userData = await authenticateEmployee(username, password, accountNumber, db);
+        } catch (error) {
+            return res.status(401).json({ error: error.message });
+        }
 
-            if (employeeUser) {
-                isValid= true;
-                userData = { 
-                    id: employeeUser._id,
-                    username: employeeUser.username,
-                    accountNumber: employeeUser.accountNumber,
-                    role: employeeUser.role,
-                    totpEnabled: employeeUser.totpEnabled || false 
-                };
-            } else {
-                return res.status(401).json({ error: 'Employee not configured' });
-            }
-        } else {
-const user = await db.collection('users').findOne({ username: username.toString() });
-            if (user) {
-                const isPasswordValid = await bcrypt.compare(password, user.password);
-                if (isPasswordValid) {
-                    if (accountNumber && user.accountNumber !== accountNumber) {
-                        return res.status(401).json({ error: 'Invalid credentials' });
-                    }
-                
-                    isValid = true;
-                    userData = { 
-                        id: user._id, 
-                        username: user.username, 
-                        accountNumber: user.accountNumber,
-                        role: user.role,
-                        totpEnabled: user.totpEnabled || false 
-                    };
-                }
+        // If not employee, try regular user authentication
+        if (!userData) {
+            try {
+                userData = await authenticateRegularUser(username, password, accountNumber, db);
+            } catch (error) {
+                return res.status(401).json({ error: error.message });
             }
         }
 
-        // If valid, generate JWT with fingerprint and IP
-        if (isValid) {
-            const fingerprint = generateFingerprint(req);
-            const clientIP = getClientIP(req);
-            const userAgent = req.headers['user-agent'] || 'unknown';
-            
-            const token = jwt.sign(
-                { 
-                    id: userData.id, 
-                    username: userData.username, 
-                    accountNumber: userData.accountNumber,
-                    fingerprint: fingerprint,
-                    ip: clientIP,
-                    ua: userAgent,
-                    role: userData.role,
-                    iat: Math.floor(Date.now() / 1000)
-                },
-                JWT_SECRET,
-                { expiresIn: '1h' }
-            );
-
-            res.cookie('authToken', token, {
-                httpOnly: true,
-                secure: HTTPS_ENABLED,
-                sameSite: 'strict',
-                maxAge: 3600000
-            });
-
-            res.json({
-                message: 'Login successful',
-                user: userData,
-                requiresMFA: true
-            });
-        } else {
-            res.status(401).json({ error: 'Invalid credentials' });
+        // If authentication failed
+        if (!userData) {
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        // Generate JWT and set cookie
+        generateAuthToken(userData, req, res);
+
+        res.json({
+            message: 'Login successful',
+            user: userData,
+            requiresMFA: true
+        });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error' });
