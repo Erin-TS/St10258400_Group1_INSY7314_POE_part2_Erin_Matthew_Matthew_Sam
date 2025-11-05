@@ -54,27 +54,28 @@ app.use((_, res, next) => {
 
 // Joi Validation Schemas
 const loginSchema = Joi.object({
-    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
-    password: Joi.string().min(6).max(128).required(),
-    accountNumber: Joi.string().alphanum().min(5).max(20).optional()
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(), // Username: letters, numbers, underscores only, 3–30 chars
+    password: Joi.string().min(6).max(128).required(), // Password must be 6–128 characters long
+    accountNumber: Joi.string().alphanum().min(5).max(20).optional() // Optional account number (alphanumeric, 5–20 chars)
 });
 
 const registerSchema = Joi.object({
-    firstName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
-    lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(),
-    idNumber: Joi.string().min(5).max(20).required(),
-    accountNumber: Joi.string().alphanum().min(5).max(20).required(),
-    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(),
-    password: Joi.string().min(6).max(128).required()
+    firstName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(), // First name: letters, spaces, apostrophes, hyphens allowed
+    lastName: Joi.string().pattern(/^[a-zA-Z\s'-]+$/).min(2).max(50).required(), // Last name: same format as first name
+    idNumber: Joi.string().min(5).max(20).required(), // ID number: unique identifier, 5–20 characters
+    accountNumber: Joi.string().alphanum().min(5).max(20).required(), // Account number: alphanumeric, 5–20 chars
+    username: Joi.string().pattern(/^[A-Za-z0-9_]{3,30}$/).min(3).max(30).required(), // Username: letters, numbers, underscores, 3–30 chars
+    password: Joi.string().min(6).max(128).required() // Password: must be 6–128 characters long
 });
 
 const totpVerifySchema = Joi.object({
-    token: Joi.string().length(6).pattern(/^[0-9]+$/).required()
+    token: Joi.string().length(6).pattern(/^[0-9]+$/).required() // 6-digit numeric token for TOTP verification
 });
 
 const hashPasswordSchema = Joi.object({
-    password: Joi.string().min(6).max(128).required()
+    password: Joi.string().min(6).max(128).required() // Password: must meet length requirements before hashing
 });
+
 
 // Apply general rate limiting to all requests
 const apiLimiter = rateLimit({
@@ -91,7 +92,7 @@ const authLimiter = rateLimit({
     max: 6, // changed from 5 to 6 (was to restrictive in testing limit each IP to 6 requests per window
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: 'Too many attempts, please try again later.' }
+    message: { error: 'Too many attempts, please try again later.' }//message displays if too many attempts
 });
 
 app.use(helmet({
@@ -110,21 +111,22 @@ app.use(helmet({
 }));
 
 // Middleware with request size limits to prevent payload attacks
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-app.use(cookieParser());
+app.use(express.json({ limit: '10kb' })); // Parses incoming JSON requests, with a 10KB size limit to prevent large payload attacks
+app.use(express.urlencoded({ extended: true, limit: '10kb' })); // Parses URL-encoded data (from forms), also limited to 10KB
+app.use(cookieParser()); // Parses cookies attached to the client request for easier access
 
 app.use(session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
+    secret: SESSION_SECRET, // Secret key used to sign and encrypt session data
+    resave: false, // Prevents session from being saved back to the store if it wasn’t modified
+    saveUninitialized: false, // Avoids saving empty sessions (for users who haven’t logged in yet)
     cookie: {
-        secure: HTTPS_ENABLED,
-        httpOnly: true,
-        sameSite: 'strict',
-        maxAge: 3600000
+        secure: HTTPS_ENABLED, // Ensures cookies are only sent over HTTPS if enabled
+        httpOnly: true, // Prevents client-side JavaScript from accessing the cookie (mitigates XSS)
+        sameSite: 'strict', // Restricts cookies to same-site requests (helps prevent CSRF attacks)
+        maxAge: 3600000 // Cookie expiration time (1 hour, in milliseconds)
     }
 }));
+
 
 // Custom MongoDB NoSQL Injection Protection middleware- to sanitize inputs
 const sanitizeNoSQL = (obj) => {
@@ -214,34 +216,35 @@ const authenticateRegularUser = async (username, password, accountNumber, db) =>
 
 // Helper function to generate JWT and set cookie
 const generateAuthToken = (userData, req, res) => {
-    const fingerprint = generateFingerprint(req);
-    const clientIP = getClientIP(req);
-    const userAgent = req.headers['user-agent'] || 'unknown';
+    const fingerprint = generateFingerprint(req); // Creates a unique fingerprint for the user’s device/browser
+    const clientIP = getClientIP(req); // Retrieves the client’s IP address for extra security tracking
+    const userAgent = req.headers['user-agent'] || 'unknown'; // Captures the browser or device type making the request
     
     const token = jwt.sign(
         { 
-            id: userData.id, 
-            username: userData.username, 
-            accountNumber: userData.accountNumber,
-            fingerprint: fingerprint,
-            ip: clientIP,
-            ua: userAgent,
-            role: userData.role,
-            iat: Math.floor(Date.now() / 1000)
+            id: userData.id, // User’s unique ID
+            username: userData.username, // Username for identification
+            accountNumber: userData.accountNumber, // Account number tied to the user
+            fingerprint: fingerprint, // Device/browser fingerprint to prevent token reuse
+            ip: clientIP, // Stores IP address in token payload
+            ua: userAgent, // Stores user-agent info (browser/device)
+            role: userData.role, // User role for access control
+            iat: Math.floor(Date.now() / 1000) // “Issued at” timestamp (in seconds)
         },
-        JWT_SECRET,
-        { expiresIn: '1h' }
+        JWT_SECRET, // Secret key used to sign and verify the JWT
+        { expiresIn: '1h' } // Token expiration time set to 1 hour
     );
 
     res.cookie('authToken', token, {
-        httpOnly: true,
-        secure: HTTPS_ENABLED,
-        sameSite: 'strict',
-        maxAge: 3600000
+        httpOnly: true, // Prevents JavaScript access to the cookie (helps stop XSS attacks)
+        secure: HTTPS_ENABLED, // Ensures cookie is only sent over HTTPS when enabled
+        sameSite: 'strict', // Restricts cookie use to same-site requests (protects against CSRF)
+        maxAge: 3600000 // Cookie lifespan: 1 hour (in milliseconds)
     });
 
-    return token;
+    return token; // Returns the generated JWT for further use (e.g., client-side storage or response)
 };
+
 
 // Middleware to verify JWT and fingerprint
 const verifyToken = (req, res, next) => {
@@ -428,12 +431,12 @@ app.post('/api/register', authLimiter, validate([
 
 //payment endpoint to store payment details in the database
 app.post('/api/payments', verifyToken, validate([
-    body('amount').isFloat({ min: 0.01 }),
-    body('currency').isIn(['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'ZAR', 'RUB']),
-    body('payeeFullName').trim().escape().notEmpty(),
-    body('payeeAccountNumber').trim().notEmpty(),
-    body('bankName').trim().escape().notEmpty(),
-    body('swiftCode').trim().matches(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/)
+    body('amount').isFloat({ min: 0.01 }),// minimum payment amount
+    body('currency').isIn(['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'ZAR', 'RUB']),// allowed currencies
+    body('payeeFullName').trim().escape().notEmpty(),// payee name
+    body('payeeAccountNumber').trim().notEmpty(),// payee account number
+    body('bankName').trim().escape().notEmpty(),//  bank name
+    body('swiftCode').trim().matches(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/)// SWIFT/BIC code format
 ]), async (req, res) => {
     try {
         // Fetch user details to get first and last name
@@ -444,7 +447,7 @@ app.post('/api/payments', verifyToken, validate([
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-
+// Create payment object
         const payment = {
             userId: req.user.id,
             username: req.user.username,
@@ -454,12 +457,12 @@ app.post('/api/payments', verifyToken, validate([
             createdAt: new Date(),
             reference: `PAY${Date.now()}`
         };
-        
+        // Insert payment into database
         const result = await db.collection('payments').insertOne(payment);
         res.json({ success: true, paymentId: result.insertedId, reference: payment.reference });
     } catch (error) {
         console.error('Payment submission error:', error);
-        res.status(500).json({ error: 'Payment submission failed' });
+        res.status(500).json({ error: 'Payment submission failed' });//generic error message
     }
 });
 
@@ -479,7 +482,7 @@ app.post('/api/payments/:id/approve', verifyToken, async (req, res) => {
         if (req.user.role !== 'employee') {
             return res.status(403).json({ error: 'Access denied' });
         }
-
+// Update payment status to approved
         await db.collection('payments').updateOne(
             { _id: new ObjectId(req.params.id) },
             { $set: { status: 'approved', approvedAt: new Date(), approvedBy: req.user.username } }
@@ -500,9 +503,9 @@ app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
             { _id: new ObjectId(req.params.id) },
             { $set: { status: 'rejected', rejectedAt: new Date(), rejectedBy: req.user.username } }
         );
-        res.json({ success: true, message: 'Payment rejected' });
+        res.json({ success: true, message: 'Payment rejected' });//success message
     } catch (error) {
-        res.status(500).json({ error: 'Failed to reject payment' });
+        res.status(500).json({ error: 'Failed to reject payment' });//generic error message
     }
 });
 
@@ -511,40 +514,40 @@ app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
 app.post('/api/register-employee', authLimiter, async (req, res) => {
     try {
         const existingEmployee = await db.collection('users').findOne({ username: 'employee' });
-
+// Check if employee user already exists
         if (existingEmployee) {
-            return res.status(400).json({ error: 'Employee user already exists' });
+            return res.status(400).json({ error: 'Employee user already exists' });//prevent duplicate employee user
         }
 
-        const hashedPassword = await bcrypt.hash('password123', 10);
-
+        const hashedPassword = await bcrypt.hash('password123', 10);// default password for employee
+// Generate TOTP secret
         const totpSecret = speakeasy.generateSecret({ 
             name: 'International payments portal (employee)',
             issuer: 'International payments portal'
         });
 
         await db.collection('users').insertOne({
-            firstName: 'Bob',
-            lastName: 'Employee',
-            idNumber: 'EMP001',
-            accountNumber: null,
-            username: 'employee',
-            password: hashedPassword,
-            totpSecret: totpSecret.base32,
-            totpEnabled: true,
-            role: 'employee'
+            firstName: 'Bob',// hardcoded first name
+            lastName: 'Employee',// hardcoded last name
+            idNumber: 'EMP001',// hardcoded ID number
+            accountNumber: null,// no account number for employee
+            username: 'employee',// hardcoded username
+            password: hashedPassword,// hashed default password
+            totpSecret: totpSecret.base32,// Store base32 encoded secret
+            totpEnabled: true,// TOTP enabled by default for employee
+            role: 'employee'// employee role
         });
-
+// Generate QR code data URL
         const qrCodeUrl = await qrcode.toDataURL(totpSecret.otpauth_url);
-
+// Send QR code and secret to user
         res.json({
-            message: 'Employee user created successfully',
+            message: 'Employee user created successfully',// success message
             qrCode: qrCodeUrl,
             totpSecret: totpSecret.base32
         });
     } catch (error) {
-        console.error('Employee registration error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Employee registration error:', error);// log error details
+        res.status(500).json({ error: 'Internal server error' });//generic error message
     }
 });
 
@@ -556,10 +559,10 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
         }
-
+// Extract TOTP token from request
         const { token: totpToken } = value;
         const userId = req.user.id;
-
+// Fetch user details
         const user = await db.collection('users').findOne({ 
             $or: [
                 {_id: new ObjectId(userId) },
@@ -567,7 +570,7 @@ app.post('/api/verify-totp', authLimiter, verifyToken, async (req, res) => {
             ]
         });
         if(!user) {
-            return res.status(404).json({ error: 'User not found' });
+            return res.status(404).json({ error: 'User not found' });// user not found error
         }
 
         // Verify TOTP token
@@ -656,18 +659,18 @@ app.post('/api/hash-password', async (req, res) => {
         if (error) {
             return res.status(400).json({ error: error.details[0].message });
         }
-
+// Extract password from request
         const { password } = value;
-        
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-        
+        // Hash the password
+        const saltRounds = 10;// number of salt rounds for bcrypt
+        const hashedPassword = await bcrypt.hash(password, saltRounds);// hash password using bcrypt
+        // Return hashed password
         res.json({ 
             message: 'Password hashed successfully'
         });
     } catch (error) {
-        console.error('Hash password error:', error);
-        res.status(500).json({ error: 'Error processing request' });
+        console.error('Hash password error:', error);// log error details
+        res.status(500).json({ error: 'Error processing request' });//generic error message
     }
 });
 
@@ -849,16 +852,16 @@ if (HTTPS_ENABLED) {
     
     const httpServer = http.createServer(httpApp);
     httpServer.listen(HTTP_PORT, () => {
-        console.log(` HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);
+        console.log(` HTTP Server redirecting to HTTPS on port ${HTTP_PORT}`);//log redirection info
     });
 } else {
     const server = app.listen(HTTP_PORT, () => {
-        console.log(`  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);
-        console.log(`   Frontend: http://localhost:${HTTP_PORT}`);
-        console.log(`   API: http://localhost:${HTTP_PORT}/api`);
+        console.log(`  HTTP Server is running on port ${HTTP_PORT} (HTTPS disabled)`);//log server start info
+        console.log(`   Frontend: http://localhost:${HTTP_PORT}`);//log frontend URL
+        console.log(`   API: http://localhost:${HTTP_PORT}/api`);//log API URL
     });
     
-    server.timeout = 30000;
-    server.keepAliveTimeout = 5000;
-    server.headersTimeout = 6000;
+    server.timeout = 30000;// Set timeouts to mitigate slowloris attacks
+    server.keepAliveTimeout = 5000;// Keep-alive timeout
+    server.headersTimeout = 6000;// Headers timeout
 }
