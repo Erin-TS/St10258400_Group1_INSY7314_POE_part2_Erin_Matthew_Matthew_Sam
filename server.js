@@ -522,7 +522,9 @@ app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
 
 //this is the backend endpoint to update a payment status when sent to swift
 app.post('/api/payments/:id/send-to-swift', verifyToken, async (req, res) => {
+    //try to update payment status
     try {
+        //check if user is employee otherwise deny access
         if (req.user.role !== 'employee') {
             return res.status(403).json({ error: 'Access denied' });
         }
@@ -537,6 +539,7 @@ app.post('/api/payments/:id/send-to-swift', verifyToken, async (req, res) => {
             } }
         );
 
+        //send success response
         res.json({ success: true, message: 'Payment sent to SWIFT successfully' });//success message
     } catch (error) {
         res.status(500).json({ error: 'Failed to send payment to SWIFT' });// error message
