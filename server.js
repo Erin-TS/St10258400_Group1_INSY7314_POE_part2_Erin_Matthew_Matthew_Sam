@@ -1,3 +1,7 @@
+//this is the main server file for the backend of the international payments portal application it
+//  handles user authentication payment processing and security 
+
+//--------------Imports---------
 import express from 'express'; 
 import https from 'https';
 import http from 'http';
@@ -12,7 +16,6 @@ import { ObjectId } from 'mongodb';
 import db from './db/conn.mjs';
 import rateLimit from 'express-rate-limit'; // Import rate limiting middleware
 import helmet from 'helmet'; // Import Helmet for security headers
-// import mongoSanitize from 'express-mongo-sanitize'; // Incompatible with Node.js v22
 import Joi from 'joi'; // Import Joi for input validation
 // Import crypto for generating recovery codes
 import crypto from 'crypto';
@@ -26,9 +29,11 @@ import { safeHTML } from './utils/sanitize.js'; // custom HTML sanitizer
 // Load environment variables
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+//--------------App Setup---------
+const __filename = fileURLToPath(import.meta.url);//get current file path
+const __dirname = path.dirname(__filename);//get current directory path
 
+//constants for app configuration, ports, and secrets
 const app = express();
 const HTTPS_PORT = process.env.HTTPS_PORT || 5443;
 const HTTP_PORT = process.env.HTTP_PORT || 5000;
@@ -249,20 +254,25 @@ const generateAuthToken = (userData, req, res) => {
 // Middleware to verify JWT and fingerprint
 const verifyToken = (req, res, next) => {
     const token = req.cookies.authToken;
+    // If no token is found deny access
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
+    // Verify token validity
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         
         const currentFingerprint = generateFingerprint(req);
+
+        // Check if fingerprint matches
         if (decoded.fingerprint !== currentFingerprint) {
             return res.status(401).json({ error: 'Session fingerprint mismatch. Please log in again.' });
         }
         
-        req.user = decoded;
+        req.user = decoded; // Attach decoded user info to request object
         next();
     } catch (error) {
+        // If token is invalid or expired
         res.status(401).json({ error: 'Invalid token.' });
     }
 };
@@ -272,12 +282,13 @@ const validate = rules => [
   ...rules,
   (req, res, next) => {
     const err = validationResult(req);
+    //check for validation errors
     if (!err.isEmpty()) return res.status(422).json({ error: 'Invalid input', details: err.array() });
     next();
   }
 ];
 
-// API routes
+// API routes these are the endpoints for the backend server for testing database connection 
 app.get('/api/test', (req, res) => {
     res.json({ message: 'Backend server is working!' });
 });
@@ -509,6 +520,31 @@ app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
     }
 });
 
+//this is the backend endpoint to update a payment status when sent to swift
+app.post('/api/payments/:id/send-to-swift', verifyToken, async (req, res) => {
+    //try to update payment status
+    try {
+        //check if user is employee otherwise deny access
+        if (req.user.role !== 'employee') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        //update the payment status to completed
+        await db.collection('payments').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { 
+                status: 'completed', 
+                sentToSwiftAt: new Date(), 
+                sentBy: req.user.username 
+            } }
+        );
+
+        //send success response
+        res.json({ success: true, message: 'Payment sent to SWIFT successfully' });//success message
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to send payment to SWIFT' });// error message
+    }
+});
 
 // Generate a TOTP for hardcoded employee user with auth rate limiting
 app.post('/api/register-employee', authLimiter, async (req, res) => {

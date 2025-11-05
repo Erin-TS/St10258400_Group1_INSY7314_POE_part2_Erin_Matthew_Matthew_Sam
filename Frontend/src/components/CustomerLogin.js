@@ -1,3 +1,4 @@
+//this is the customer login component
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './FormStyles.css';
@@ -14,6 +15,7 @@ const CustomerLogin = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    // Handle input changes
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -26,6 +28,7 @@ const CustomerLogin = () => {
         e.preventDefault();
         setLoading(true);
 
+        // Attempt to log in the customer
         try {
             // Make API call to login endpoint
             const response = await fetch('/api/login', {
@@ -43,7 +46,7 @@ const CustomerLogin = () => {
     // Parse the JSON response
             const data = await response.json();
 
-            // If login is successful, store user info and navigate to OTP verification
+            // If login is successful store user info and navigate to OTP verification
             if (response.ok) {
                 sessionStorage.setItem('userType', 'customer');
                 sessionStorage.setItem('isAuthenticated', 'pending');

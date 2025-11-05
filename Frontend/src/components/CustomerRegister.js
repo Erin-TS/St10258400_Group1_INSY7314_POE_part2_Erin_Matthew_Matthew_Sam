@@ -1,7 +1,9 @@
+// this is the customer registration component
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';
 
+// CustomerRegister component
 const CustomerRegister = () => {
     const [formData, setFormData] = useState({
         firstName: '',
@@ -13,6 +15,7 @@ const CustomerRegister = () => {
         confirmPassword: ''
     });
 
+    // constants for loading and display states for QR and recovery codes
     const [loading, setLoading] = useState(false);
     const [showQRCode, setShowQRCode] = useState(false);
     const [qrCodeData, setQrCodeData] = useState(null);
@@ -23,6 +26,7 @@ const CustomerRegister = () => {
     const [downloadSuccess, setDownloadSuccess] = useState(false);
     const navigate = useNavigate();
 
+    // Handle input changes
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -40,7 +44,7 @@ const CustomerRegister = () => {
             return;
         }
 
-        setLoading(true);
+        setLoading(true); // Start loading state
 
         try {
             // Register user
@@ -59,14 +63,16 @@ const CustomerRegister = () => {
                 })
             });
 
+            // Get response data
             const data = await response.json();
 
+            // If registration is successful go to TOTP setup
             if (response.ok) {
                 setQrCodeData(data);
                 setShowQRCode(true);
                 
             } else {
-                alert(data.error || 'Registration failed');
+                alert(data.error || 'Registration failed'); //registration error
             }
         } catch (error) {
             alert('Registration failed');
@@ -77,7 +83,9 @@ const CustomerRegister = () => {
 
     // Continue to Recovery Codes
     const handleContinueToRecoveryCodes = async () => {
-        setLoading(true);
+        setLoading(true);// Start loading state
+
+        // Generate recovery codes
         try {
 
             const response = await fetch('/api/generate-recovery-codes', {
@@ -87,9 +95,10 @@ const CustomerRegister = () => {
                 },
                 body: JSON.stringify({ userId: qrCodeData.userId })
             });
-
+            //get response data
             const data = await response.json();
 
+            // If successful show recovery codes
             if (response.ok && data.success) {
                 setRecoveryCodes(data.codes);
                 setShowQRCode(false);
@@ -116,6 +125,7 @@ const CustomerRegister = () => {
             
             setTimeout(() => setCopySuccess(false), 2000);
         } catch (err) {
+            //failed to copy
             console.error('Failed to copy:', err);
             alert('Failed to copy codes. Please try downloading instead.');
         }
@@ -123,7 +133,9 @@ const CustomerRegister = () => {
 
     // Download Recovery Codes
     const handleDownloadCodes = () => {
+        //create the text content
         const codesText = recoveryCodes.join('\n');
+        //create the template for the file
         const blob = new Blob([
             'RECOVERY CODES - KEEP SAFE\n',
             '================================\n\n',
@@ -134,28 +146,32 @@ const CustomerRegister = () => {
             `Generated: ${new Date().toLocaleString()}`
         ], { type: 'text/plain' });
 
+        //create a download link and trigger it
         const url = window.URL.createObjectURL(blob);
+        //create an anchor element and click it
         const a = document.createElement('a');
-        a.href = url;
-        a.download = `recovery-codes-${Date.now()}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        a.href = url; //link to the blob
+        a.download = `recovery-codes-${Date.now()}.txt`; //set filename with thimestamp
+        document.body.appendChild(a); //append to body
+        a.click(); //trigger click
+        window.URL.revokeObjectURL(url); //release URL
+        document.body.removeChild(a); //remove anchor
 
-        setDownloadSuccess(true);
-        setCodesSaved(true);
+        setDownloadSuccess(true); //indicate success
+        setCodesSaved(true);    //mark codes as saved
         
-        setTimeout(() => setDownloadSuccess(false), 2000);
+        setTimeout(() => setDownloadSuccess(false), 2000); //reset success state
     };
     
     // Continue to Login
     const handleContinueToLogin = () => {
         if (!codesSaved) {
+            // ensure codes are saved
             alert('Please save your recovery codes before continuing!');
             return;
         }
 
+        // Redirect to login page
         alert('Registration successful! Please login.');
                 sessionStorage.clear();
                 window.location.href = '/customer-login'; 
