@@ -1,4 +1,4 @@
-//this file is the main app component
+//this file is the main app component it sets up routing for the application
 import React from 'react';
 import './App.css';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
