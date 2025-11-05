@@ -520,6 +520,28 @@ app.post('/api/payments/:id/reject', verifyToken, async (req, res) => {
     }
 });
 
+//this is the backend endpoint to update a payment status when sent to swift
+app.post('/api/payments/:id/send-to-swift', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'employee') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        //update the payment status to completed
+        await db.collection('payments').updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { 
+                status: 'completed', 
+                sentToSwiftAt: new Date(), 
+                sentBy: req.user.username 
+            } }
+        );
+
+        res.json({ success: true, message: 'Payment sent to SWIFT successfully' });//success message
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to send payment to SWIFT' });// error message
+    }
+});
 
 // Generate a TOTP for hardcoded employee user with auth rate limiting
 app.post('/api/register-employee', authLimiter, async (req, res) => {
