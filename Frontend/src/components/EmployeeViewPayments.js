@@ -162,9 +162,11 @@ const EmployeeViewPayments = () => {
             case 'pending': 
                 return 'orange';
             case 'completed':
+                return 'dark green';
             case 'approved':
                 return 'green';
             case 'failed':
+                return 'amber';
             case 'rejected':
                 return 'red';
             default:

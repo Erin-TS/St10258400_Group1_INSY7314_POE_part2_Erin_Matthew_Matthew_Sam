@@ -1,3 +1,4 @@
+//this is the home page it has navigation menu for customer and employee portals
 import React from 'react';
 import { Link } from 'react-router-dom';
 import './FormStyles.css';

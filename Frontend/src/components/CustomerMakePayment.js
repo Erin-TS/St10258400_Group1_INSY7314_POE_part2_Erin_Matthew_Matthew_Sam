@@ -1,3 +1,4 @@
+//this is the customer make payment component
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormStyles.css';
@@ -36,6 +37,7 @@ const validateField = (fieldName, value, element) => {
     const rule = validationRules[fieldName];
     if (!rule) return true;
     
+    // Validate against pattern
     if (value && !rule.pattern.test(value)) {
         element.setCustomValidity(rule.message);
         if (rule.reportImmediately) {
@@ -44,6 +46,7 @@ const validateField = (fieldName, value, element) => {
         return false;
     }
     
+    // Clear any previous validation message
     element.setCustomValidity('');
     return true;
 };
@@ -61,7 +64,9 @@ const CustomerMakePayment = () => {
         swiftCode: ''
     });
 
+    // Loading state
     const [loading, setLoading] = useState(false);
+    // Navigation hook
     const navigate = useNavigate();
 
     //useEffect to check authentication and user type
@@ -69,6 +74,7 @@ const CustomerMakePayment = () => {
         const isAuthenticated = sessionStorage.getItem('isAuthenticated');
         const userType = sessionStorage.getItem('userType');
 
+        // Redirect to login if not authenticated or not a customer
         if (isAuthenticated !== 'true' || userType !== 'customer') {
             alert('Please login as a customer to access this page');
             navigate('/customer-login');
@@ -107,6 +113,7 @@ const CustomerMakePayment = () => {
             body: JSON.stringify(formData)
         });
 
+        //process response
         const data = await response.json();
         if (response.ok && data.success) {
             alert('Payment successful! Reference: ' + data.reference);
@@ -123,9 +130,11 @@ const CustomerMakePayment = () => {
                 swiftCode: ''
             });
         } else {
+            //payment failed
             alert(data.error || 'Payment failed. Please try again.');
         }
          } catch (error) {
+            //payment error
             console.error('Payment error:', error);
             alert('An error occurred during payment. Please try again.');
         } finally {

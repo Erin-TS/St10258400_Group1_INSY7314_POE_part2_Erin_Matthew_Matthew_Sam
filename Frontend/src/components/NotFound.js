@@ -1,7 +1,9 @@
+//this component displays a 404 Not Found page with a link to return to the homepage.
 import React from 'react';
 import { Link } from 'react-router-dom';
 import './FormStyles.css'; 
 
+// NotFound component
 const NotFound = () => {
     return (
         <div className="not-found-container">

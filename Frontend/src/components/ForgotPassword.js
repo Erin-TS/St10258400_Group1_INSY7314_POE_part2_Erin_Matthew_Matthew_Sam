@@ -1,3 +1,4 @@
+//this is the forgot password component that allows users to reset their password using a recovery code
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './FormStyles.css'; 
@@ -55,12 +56,16 @@ const handleCodeSubmit = async (e) => {
 const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
+    // Check if passwords match
     if (formData.newPassword !== formData.confirmPassword) {
       alert('Passwords do not match');
       return;
     }
     
+    // move to reset password
     setLoading(true);
+
+    // try Call backend to reset password
     try {
       const res = await fetch('/api/reset-password', {
         method: 'POST',
@@ -76,12 +81,13 @@ const handlePasswordSubmit = async (e) => {
 
       alert('Password reset successful! Please login with your new password.');
       sessionStorage.clear();
-      
+      // Redirect to login page after successful reset
       navigate('/customer-login');
     } catch (error) {
+      //error restetting password
       alert(error.message || 'Error resetting password');
     } finally {
-      setLoading(false);
+      setLoading(false); // End loading state
     }
   };
 

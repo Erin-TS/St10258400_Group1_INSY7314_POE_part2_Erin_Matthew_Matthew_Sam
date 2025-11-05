@@ -1,3 +1,4 @@
+// this is the employee login component
 import React, { useState } from 'react';
 import { useNavigate ,Link} from 'react-router-dom';
 import './FormStyles.css';
@@ -13,6 +14,7 @@ const EmployeeLogin = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    // Handle input changes
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -37,7 +39,7 @@ const EmployeeLogin = () => {
                 ), 
             });
 
-            const data = await response.json();
+            const data = await response.json(); //pass response data
 
             // If login is successful, store user data and navigate to OTP page
             if (response.ok) {
@@ -46,13 +48,14 @@ const EmployeeLogin = () => {
                 sessionStorage.setItem('user', JSON.stringify(data.user));
                 navigate('/otp', { state: { userType: 'employee', from: 'login' } });
             } else {
-                alert(data.error || 'Login failed');
+                alert(data.error || 'Login failed'); // Show error message
             }
         } catch (error) {
+            //login error
             console.error('Login error:', error);
             alert('An error occurred during login');
         } finally {
-            setLoading(false);
+            setLoading(false); // End loading state
         }
     };
 
