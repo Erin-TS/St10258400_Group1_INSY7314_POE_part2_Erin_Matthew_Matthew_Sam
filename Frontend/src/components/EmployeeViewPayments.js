@@ -144,9 +144,26 @@ const EmployeeViewPayments = () => {
         }   
     };
 
-    // Handle send to SWIFT this is faked
-    const handleSendToSwift = (paymentId, reference) => {
-        alert(`Sending payment ${reference} to SWIFT...`);
+    // Handle send to SWIFT this is just a message with a status update
+    const handleSendToSwift = async (paymentId, reference) => {
+      //try and send to SWIFT by calling backend endpoint
+      try {
+        const response = await fetch(`/api/payments/${paymentId}/send-to-swift`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+
+        //check response and alert user
+        if (response.ok) {
+            alert(`Payment with reference ${reference} sent to SWIFT successfully.`);
+            fetchPayments();//refresh payments to show updated status
+        } else {
+            alert(`Failed to send payment with reference ${reference} to SWIFT.`);
+        }
+    } catch (error) {
+        console.error('Error sending payment to SWIFT:', error);
+        alert(`Error sending payment to swift.`);
+    }
         
     };
 
@@ -162,11 +179,9 @@ const EmployeeViewPayments = () => {
             case 'pending': 
                 return 'orange';
             case 'completed':
-                return 'dark green';
+                return 'darkgreen';
             case 'approved':
                 return 'green';
-            case 'failed':
-                return 'amber';
             case 'rejected':
                 return 'red';
             default:
@@ -205,7 +220,6 @@ const EmployeeViewPayments = () => {
                         <option value="pending">Pending</option>
                         <option value="completed">Completed</option>
                         <option value="approved">Approved</option>
-                        <option value="failed">Failed</option>
                         <option value="rejected">Rejected</option>
                     </select>
                 </div>
